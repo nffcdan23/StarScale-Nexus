@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <!-- Temporary stand-in for a background photograph. Replace it by adding your
+       own image to public/backdrops and changing the path in src/app/brand.ts. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#080d22"/>
+      <stop offset="0.28" stop-color="#0e1838"/>
+      <stop offset="0.46" stop-color="#1b2654"/>
+      <stop offset="0.57" stop-color="#3a3063"/>
+      <stop offset="0.64" stop-color="#70486a"/>
+      <stop offset="0.7" stop-color="#b56c5f"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="1430" cy="640" r="660" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffdcae" stop-opacity="0.95"/>
+      <stop offset="0.07" stop-color="#ffb47c" stop-opacity="0.78"/>
+      <stop offset="0.24" stop-color="#ee876a" stop-opacity="0.38"/>
+      <stop offset="0.5" stop-color="#8a5a9a" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#1a2452" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="farRange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#30335f"/>
+      <stop offset="1" stop-color="#1b2048"/>
+    </linearGradient>
+    <linearGradient id="midRange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#161c41"/>
+      <stop offset="1" stop-color="#0d1230"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a3a62"/>
+      <stop offset="0.22" stop-color="#252b58"/>
+      <stop offset="0.6" stop-color="#10163a"/>
+      <stop offset="1" stop-color="#070a1c"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="960" cy="520" r="1150" gradientUnits="userSpaceOnUse">
+      <stop offset="0.5" stop-color="#03050e" stop-opacity="0"/>
+      <stop offset="1" stop-color="#03050e" stop-opacity="0.6"/>
+    </radialGradient>
+    <filter id="blurWide" x="-20%" y="-200%" width="140%" height="500%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <filter id="blurSoft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <rect width="1920" height="1080" fill="url(#sunGlow)"/>
+
+  <!-- Soft cloud bands catching the last light -->
+  <g filter="url(#blurWide)">
+    <ellipse cx="640" cy="330" rx="420" ry="20" fill="#3f4288" opacity="0.6"/>
+    <ellipse cx="1150" cy="410" rx="460" ry="22" fill="#6a4a86" opacity="0.6"/>
+    <ellipse cx="1580" cy="486" rx="380" ry="18" fill="#b96a78" opacity="0.6"/>
+    <ellipse cx="1280" cy="556" rx="330" ry="12" fill="#e58d6c" opacity="0.55"/>
+  </g>
+
+  <circle cx="1430" cy="626" r="26" fill="#ffe9c9" filter="url(#blurSoft)"/>
+
+  <path fill="url(#farRange)" d="M0,668 L60,640 L110,652 L180,596 L230,618 L300,560 L352,588 L420,528 L470,556 L540,492 L596,530 L650,470 L700,500 L760,430 L812,468 L860,440 L930,392 L990,446 L1040,424 L1100,480 L1150,462 L1220,520 L1280,548 L1340,590 L1400,628 L1460,640 L1520,618 L1580,586 L1640,604 L1700,560 L1760,592 L1820,570 L1880,600 L1920,590 L1920,770 L0,770 Z"/>
+  <path fill="url(#midRange)" d="M0,716 L80,690 L150,704 L240,664 L310,690 L400,650 L470,682 L560,660 L640,700 L730,676 L820,710 L920,694 L1010,720 L1120,704 L1230,726 L1330,712 L1430,730 L1540,708 L1630,722 L1730,696 L1820,716 L1920,700 L1920,780 L0,780 Z"/>
+
+  <rect y="748" width="1920" height="332" fill="url(#lake)"/>
+  <g filter="url(#blurWide)">
+    <ellipse cx="1430" cy="772" rx="430" ry="26" fill="#f39a72" opacity="0.4"/>
+    <ellipse cx="1430" cy="900" rx="48" ry="170" fill="#ffb47c" opacity="0.3"/>
+  </g>
+
+  <path fill="#0a0e24" d="M0,738 C160,730 320,744 520,740 C760,734 980,748 1220,742 C1460,736 1700,748 1920,740 L1920,756 L0,756 Z"/>
+  <path fill="#04060f" d="M0,1080 L0,860 C120,850 240,900 380,960 C500,1010 600,1050 720,1080 Z"/>
+  <path fill="#04060f" d="M1920,1080 L1920,900 C1800,892 1660,950 1540,1020 C1490,1050 1450,1070 1420,1080 Z"/>
+
+  <rect width="1920" height="1080" fill="url(#vignette)"/>
+</svg>

@@ -1,0 +1,106 @@
+/*
+ * Design tokens for Nexus. Every colour, size and timing a component uses is
+ * named here, so the look can be tuned in one place. The values are estimates
+ * taken by eye from the screenshots in design-references/.
+ */
+:root {
+  /* Base colours: deep navy, darkest first */
+  --color-ink-950: #050814;
+  --color-ink-900: #0a1022;
+  --color-ink-800: #101a33;
+  --color-ink-700: #19254a;
+
+  /* Accent: pale sky blue, used sparingly */
+  --color-accent: #a9c9ff;
+  --color-accent-strong: #7fb0ff;
+  --color-accent-wash: rgba(127, 176, 255, 0.16);
+  --color-accent-glow: rgba(110, 168, 255, 0.4);
+
+  /* Status colours, reserved for badges and health indicators */
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  /* Text, strongest first */
+  --text-primary: rgba(255, 255, 255, 0.96);
+  --text-secondary: rgba(222, 232, 255, 0.72);
+  --text-tertiary: rgba(205, 218, 255, 0.5);
+
+  /* Glass surfaces */
+  --glass-fill: linear-gradient(180deg, rgba(26, 37, 70, 0.56) 0%, rgba(13, 20, 43, 0.5) 100%);
+  --glass-fill-strong: linear-gradient(180deg, rgba(18, 27, 54, 0.74) 0%, rgba(9, 14, 32, 0.7) 100%);
+  --glass-fill-tint: linear-gradient(180deg, rgba(22, 33, 66, 0.78) 0%, rgba(11, 17, 38, 0.74) 100%);
+  --glass-edge: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.07) 28%,
+    rgba(255, 255, 255, 0.04) 62%,
+    rgba(150, 190, 255, 0.2) 100%
+  );
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 28px 60px -28px rgba(2, 5, 18, 0.75);
+  --glass-blur: 22px;
+
+  /* Shown behind everything when no backdrop image is set */
+  --backdrop-fallback:
+    radial-gradient(ellipse 60% 45% at 76% 62%, rgba(238, 135, 106, 0.32) 0%, rgba(138, 90, 154, 0.14) 45%, transparent 75%),
+    radial-gradient(ellipse 90% 60% at 25% 0%, rgba(60, 90, 170, 0.3) 0%, transparent 70%),
+    linear-gradient(180deg, #050916 0%, #0b1433 45%, #1a2046 68%, #0a0f24 100%);
+
+  /* Typography */
+  --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.75rem;
+  --text-display: clamp(2rem, 1.45rem + 1.5vw, 2.625rem);
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-tight: 1.15;
+  --leading-normal: 1.5;
+  --tracking-tight: -0.02em;
+  --tracking-eyebrow: 0.2em;
+
+  /* Spacing, on a 4px grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Corner radii */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --sidebar-width: 232px;
+  --sidebar-width-compact: 76px;
+  --shell-gutter: 16px;
+  --content-max: 1560px;
+  /* Room kept clear at the bottom of the page area for the Ask Nexus command
+     bar. Zero until the bar exists. */
+  --dock-space: 0px;
+
+  /* Motion: quick and restrained */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 420ms;
+
+  --focus-ring: 0 0 0 2px rgba(10, 16, 34, 0.9), 0 0 0 4px rgba(127, 176, 255, 0.75);
+
+  /* One TV unit is 1% of a 16:9 screen's width, so TV sizes scale together
+     and look the same on a 1080p or 4K television. */
+  --tv-unit: min(1vw, 1.7778vh);
+}

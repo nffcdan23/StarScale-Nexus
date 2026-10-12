@@ -1,0 +1,44 @@
+.shell {
+  position: relative;
+  /* Keeps the fixed backdrop behind this shell's content and nothing else. */
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  column-gap: var(--shell-gutter);
+  min-height: 100dvh;
+  padding: var(--shell-gutter);
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--shell-gutter);
+  height: calc(100dvh - 2 * var(--shell-gutter));
+}
+
+.main {
+  min-width: 0;
+  padding: var(--space-3) var(--space-5) calc(var(--space-8) + var(--dock-space));
+}
+
+.page {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  animation: page-in var(--duration-slow) var(--ease-out) both;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
+  }
+
+  .main {
+    padding-inline: var(--space-3);
+  }
+}

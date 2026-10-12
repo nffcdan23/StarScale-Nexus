@@ -1,0 +1,28 @@
+# Dependencies and caches
+node_modules/
+.npm-cache/
+
+# Build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets and local-only settings: never commit these
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.claude/settings.local.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store

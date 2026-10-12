@@ -1,0 +1,20 @@
+/* Vertical rhythm shared by every standard page */
+.stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+/* Body text that lines up with the page title above it */
+.body {
+  padding-inline: var(--space-2);
+}
+
+.link {
+  color: var(--color-accent);
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  color: var(--text-primary);
+}

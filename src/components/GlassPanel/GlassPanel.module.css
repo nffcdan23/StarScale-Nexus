@@ -1,0 +1,47 @@
+.panel {
+  position: relative;
+  border-radius: var(--radius-xl);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+}
+
+/* A hairline edge that catches the light at the top-left corner. Drawn as a
+   masked gradient ring so it follows the rounded corners. */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--glass-edge);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.strong {
+  background: var(--glass-fill-strong);
+}
+
+.blur {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(135%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(135%);
+}
+
+.tint {
+  background: var(--glass-fill-tint);
+}
+
+.padMd {
+  padding: var(--space-6);
+}
+
+.padLg {
+  padding: var(--space-8) var(--space-10);
+}
