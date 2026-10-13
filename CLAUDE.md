@@ -29,6 +29,45 @@ plain English, define technical terms, and go one step at a time.
 - Completion reports use: Implemented / Testing / Visual Review / Git / Issues /
   Next Step. Keep them short.
 
+## Two computers
+
+- **MacBook Pro (work-issued, Apple silicon):** where Claude writes source
+  code, migrations and tests, and runs the frontend and the simulated checks.
+  Never install Docker, PostgreSQL, the Supabase tool or any other
+  system-level software on it, and never change its system settings.
+  Project-level npm packages need the owner's approval. No real secret and no
+  real data ever lives on this machine.
+- **Windows PC (the owner's own):** will run Docker and a local Supabase
+  stack for database, sign-in and integration testing, and later shows
+  Mission Control on the TV. It must never become the production backend.
+- The owner moves the project between them through their private GitHub
+  repository, by hand. Claude never touches GitHub. Commit before leaving a
+  machine and pull before starting on the other; never leave uncommitted work
+  on both.
+- Keep everything portable: Node scripts run through npm (no shell scripts),
+  no absolute paths, line endings fixed by `.gitattributes`, machine-specific
+  values only in ignored `*.local` files with a committed example beside them.
+- Installed packages, caches, build output and local settings are not carried
+  by Git. Each machine rebuilds them with `npm ci`.
+
+## Security tests
+
+- `npm run test:security` runs on any machine: it applies the migrations to
+  PGlite (PostgreSQL in memory, with an imitation of Supabase's roles and
+  signed-in user), runs every access check, and proves the checks notice a
+  removed protection. `tests/security/README.md` explains the layout.
+- `npm run test:security:real` runs the same checks, plus real sign-in and
+  Data API checks, against a local Supabase stack on the Windows PC. It was
+  written without a stack to test it on and has never been executed.
+- Results go to `docs/security-report.md`, which is generated, not written by
+  hand. Every check is reported as Passed, FAILED, Not executed, Not possible
+  or Stale. **A simulated pass is never proof that real Supabase security
+  works; only the Real Supabase column counts.** Say so in every report.
+- Every migration that adds a table or function adds its checks to
+  `tests/security/lib/cases.mjs` in the same change. Do not hand-imitate more
+  of Supabase than the imitation already does; mark such checks as needing
+  real Supabase.
+
 ## Before each commit
 
 - Check `git status` for unrelated or sensitive files. `.env` files, keys,
@@ -40,8 +79,8 @@ plain English, define technical terms, and go one step at a time.
 - Run every npm command from the project root. `.npmrc` keeps npm's download
   cache in `.npm-cache/` inside the project and stops packages running install
   scripts.
-- Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, or
-  `npm run check` for all four.
+- Checks: `npm run typecheck`, `npm run lint`, `npm test`,
+  `npm run test:security`, `npm run build`, or `npm run check` for all five.
 - Run locally: `npm run dev`, then open http://localhost:5180. The TV dashboard
   is http://localhost:5180/tv.
 - Dependencies are pinned to exact versions. Several are newer than older
@@ -58,6 +97,15 @@ plain English, define technical terms, and go one step at a time.
   motion). Change values there, not inside components.
 - `src/lib/`: small helpers.
 - `design-references/`: the owner's original screenshots.
+- `supabase/migrations/`: numbered database changes. Never edit one that has
+  been applied anywhere; add a new one. Every table gets row-level security,
+  a `revoke all`, and explicit column-by-column grants in the same file.
+- `tests/security/`: the security checks. `docs/security-report.md`: their
+  generated results.
+- Database model so far: `contexts` and `tasks` in `public`; `private.identities`
+  registers which sign-ins are the owner or a TV; `public.tv_summary()` is the
+  only function that reads past the access rules. Nothing can be deleted
+  through the Data API, only archived.
 - To add a section: one entry in `src/app/navigation.ts` and one route in
   `src/app/routes.tsx`. Only sections that work appear in the sidebar.
 - To replace the temporary backdrop or logo: put the file in `public/` and
@@ -98,12 +146,27 @@ plain English, define technical terms, and go one step at a time.
   room for the bar.
 - The TV has no arrows or checkboxes and avoids small text.
 
+## Future design improvements
+
+Recorded from the owner's review of Phase 1 on 13 October 2026. Do not
+implement any of these until the owner asks.
+
+- Backdrop: the illustrated mountain scene is not realistic enough. The owner
+  wants a photorealistic, cinematic landscape like the reference screenshots:
+  realistic mountains, atmospheric lighting, sunset colours. The image is
+  swapped through `src/app/brand.ts`.
+- Glass effects: to be revisited once the dashboard holds more components and
+  information.
+- Layout, navigation and typography: accepted as the foundation.
+
 ## Roadmap
 
 - 1a TV placement check on the Windows PC (no code): not yet done.
 - 1b Foundation shell: done 13 October 2026.
-- 2a Access rules on a local practice database (needs a container tool:
-  approval required). 2b Sign-in, task entry and TV summary, all local.
+- 2a Database foundation and simulated security checks: done 13 October 2026.
+  Real Supabase checks are written but not yet executed.
+- 2b On the Windows PC: local Supabase stack, then run the real checks. After
+  that, sign-in, task entry and TV summary in the app.
   2c Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
@@ -117,5 +180,7 @@ plain English, define technical terms, and go one step at a time.
 
 - How many active free-plan Supabase projects the owner's account has (the
   limit is two; this decides whether go-live can be free).
+- No Supabase settings file (`supabase/config.toml`) exists yet. Let the
+  Supabase tool create it on the Windows PC rather than writing it by hand.
 - Windows details for the TV check: edition, display arrangement and scale,
   everyday browser, virtual desktops.

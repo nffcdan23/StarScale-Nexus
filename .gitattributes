@@ -1,0 +1,6 @@
+# One line-ending style on every computer, so moving between macOS and
+# Windows never rewrites files or changes the migrations fingerprint.
+* text=auto eol=lf
+
+*.png binary
+*.woff2 binary
