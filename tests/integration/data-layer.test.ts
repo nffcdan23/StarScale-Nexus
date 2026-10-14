@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSupabaseDataServices } from '../../src/data/supabaseData'
-import type { DataServices } from '../../src/data/types'
+import type { DataServices, NoteDoc } from '../../src/data/types'
 import { authenticatorCode } from '../security/real/api-checks.mjs'
 
 if (existsSync('.env.security.local')) process.loadEnvFile('.env.security.local')
@@ -249,6 +249,80 @@ describe('TV summary against real Supabase (Phase 2c-3a)', () => {
 
     // The owner, with an authenticator code, gets exactly the same redacted summary.
     expect((await ownerData.summary.get()).tasks).toEqual(summary.tasks)
+  })
+})
+
+describe('notes against real Supabase (Phase 3a)', () => {
+  const paragraph = (text: string): NoteDoc => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+
+  it('creates a note with no context; the database derives its text and starts it at revision 1', async () => {
+    const note = await ownerData.notes.create({
+      title: 'Integration plan',
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Goals' }] },
+          { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ship notes' }] }] }] },
+        ],
+      },
+    })
+    expect(note).toMatchObject({ contextId: null, revision: 1, text: 'Goals\nShip notes', pinned: false, archivedAt: null })
+  })
+
+  it('files a note under a context and takes it out again', async () => {
+    const context = await ownerData.contexts.create('Notes context')
+    const note = await ownerData.notes.create({ title: 'Filed' })
+    const filed = await ownerData.notes.save(note.id, { contextId: context.id }, note.revision)
+    expect(filed.contextId).toBe(context.id)
+    expect((await ownerData.notes.save(note.id, { contextId: null }, filed.revision)).contextId).toBeNull()
+  })
+
+  it('detects a save based on an older revision, and pinning does not count as an edit', async () => {
+    const note = await ownerData.notes.create({ title: 'Shared', content: paragraph('First') })
+    const pinned = await ownerData.notes.setPinned(note.id, true)
+    expect(pinned.revision).toBe(note.revision)
+    expect(pinned.updatedAt).toBe(note.updatedAt)
+
+    const saved = await ownerData.notes.save(note.id, { content: paragraph('Second') }, note.revision)
+    expect(saved.revision).toBe(note.revision + 1)
+    expect(saved.text).toBe('Second')
+    await expect(ownerData.notes.save(note.id, { content: paragraph('Stale') }, note.revision)).rejects.toMatchObject({ kind: 'conflict' })
+    expect((await ownerData.notes.get(note.id)).text).toBe('Second')
+  })
+
+  it('archives a note out of the list and search, and restores it', async () => {
+    const note = await ownerData.notes.create({ title: 'Archivable', content: paragraph('Zebracorn pasture') })
+    await ownerData.notes.setArchived(note.id, true)
+    expect((await ownerData.notes.list()).map((entry) => entry.id)).not.toContain(note.id)
+    expect((await ownerData.notes.list({ archived: true })).map((entry) => entry.id)).toContain(note.id)
+    expect(await ownerData.notes.search('zebracorn')).toEqual([])
+    expect((await ownerData.notes.search('zebracorn', { includeArchived: true })).map((entry) => entry.id)).toEqual([note.id])
+    await ownerData.notes.setArchived(note.id, false)
+    expect((await ownerData.notes.list()).map((entry) => entry.id)).toContain(note.id)
+  })
+
+  it('searches by word start, with matches marked in the snippet', async () => {
+    const note = await ownerData.notes.create({ title: 'Quokka notes', content: paragraph('The quokkaberry harvest starts soon') })
+    const results = await ownerData.notes.search('quokkab')
+    expect(results.map((entry) => entry.id)).toEqual([note.id])
+    expect(results[0].snippet.some((part) => part.match && part.text.toLowerCase().startsWith('quokkaberry'))).toBe(true)
+  })
+
+  it('rejects a link that is not a web or email address', async () => {
+    const note = await ownerData.notes.create({ title: 'Links' })
+    const bad: NoteDoc = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }] }],
+    }
+    await expect(ownerData.notes.save(note.id, { content: bad }, note.revision)).rejects.toMatchObject({ kind: 'invalid' })
+  })
+
+  it('gives the TV sign-in no notes and no search results', async () => {
+    await ownerData.notes.create({ title: 'Not for the TV', content: paragraph('Wombatfruit') })
+    expect(await tvData.notes.list()).toEqual([])
+    expect(await tvData.notes.list({ archived: true })).toEqual([])
+    expect(await tvData.notes.search('wombatfruit')).toEqual([])
+    expect(JSON.stringify(await tvData.summary.get())).not.toContain('Wombatfruit')
   })
 })
 

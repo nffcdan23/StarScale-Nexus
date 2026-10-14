@@ -12,9 +12,11 @@ function names(sql, pattern) {
 export function runStaticChecks(migrations) {
   const sql = migrations.map((migration) => stripComments(migration.sql)).join('\n')
   const tables = names(sql, /create table\s+([\w.]+)/g)
-  const functions = [...sql.matchAll(/create function\s+([\w.]+)\(\)([\s\S]*?)as \$\$/g)].map(
-    ([, name, header]) => ({ name, header }),
+  // Every function, with or without inputs, created or replaced.
+  const functions = [...sql.matchAll(/create (?:or replace )?function\s+([\w.]+)\s*\(([\s\S]*?)\)\s*returns([\s\S]*?)as \$\$/g)].map(
+    ([, name, , header]) => ({ name, header }),
   )
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
   const missing = (items, test) => items.filter((item) => !test(item))
   const result = (id, title, problems) => ({
@@ -42,7 +44,8 @@ export function runStaticChecks(migrations) {
       'Every function has its default permission removed',
       missing(
         functions.map((fn) => fn.name),
-        (name) => sql.includes(`revoke all on function ${name}() from public, anon, authenticated`),
+        (name) =>
+          new RegExp(`revoke all on function ${escape(name)}\\([^)]*\\) from public, anon, authenticated`).test(sql),
       ),
     ),
     result(

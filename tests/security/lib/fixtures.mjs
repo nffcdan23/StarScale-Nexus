@@ -15,7 +15,17 @@ export const ids = {
   taskDone: 'bbbbbbbb-0000-4000-8000-000000000004',
   taskArchived: 'bbbbbbbb-0000-4000-8000-000000000005',
   taskOther: 'bbbbbbbb-0000-4000-8000-000000000006',
+  noteFiled: 'cccccccc-0000-4000-8000-000000000001',
+  noteUncategorised: 'cccccccc-0000-4000-8000-000000000002',
+  noteArchived: 'cccccccc-0000-4000-8000-000000000003',
+  noteOther: 'cccccccc-0000-4000-8000-000000000004',
 }
+
+/** Text in a note's body that must never reach the TV. */
+export const secretNoteBody = 'SECRET-NOTE-BODY'
+
+/** A one-paragraph note document, as the editor saves it. */
+export const noteDoc = (text) => JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
 
 /** Text that must never reach the TV. */
 export const secretNote = 'SECRET-NOTE-DO-NOT-SHOW'
@@ -79,4 +89,11 @@ insert into public.tasks (id, owner_id, context_id, title, notes, status, hide_f
   ('bbbbbbbb-0000-4000-8000-000000000004', '${ids.owner}', '${ids.contextVisible}', 'Finished task', null, 'done', false, null),
   ('bbbbbbbb-0000-4000-8000-000000000005', '${ids.owner}', '${ids.contextVisible}', 'Archived task', null, 'open', false, now()),
   ('${ids.taskOther}', '${ids.otherOwner}', '${ids.contextOther}', 'Other owner task', null, 'open', false, null);
+
+insert into public.notes (id, owner_id, context_id, title, content, archived_at) values
+  ('${ids.noteFiled}', '${ids.owner}', '${ids.contextVisible}', 'Board meeting',
+    '${noteDoc(`Discuss the investor timeline ${secretNoteBody}`)}', null),
+  ('${ids.noteUncategorised}', '${ids.owner}', null, 'Shopping list', '${noteDoc('Buy milk and bread')}', null),
+  ('${ids.noteArchived}', '${ids.owner}', '${ids.contextVisible}', 'Old idea', '${noteDoc('An investor pitch from last year')}', now()),
+  ('${ids.noteOther}', '${ids.otherOwner}', '${ids.contextOther}', 'Other owner note', '${noteDoc('Investor notes elsewhere')}', null);
 `

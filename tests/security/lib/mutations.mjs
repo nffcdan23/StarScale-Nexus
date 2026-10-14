@@ -65,6 +65,54 @@ export const mutations = [
     title: 'TV summary no longer leaves out archived contexts',
     apply: remove('and c.archived_at is null'),
   },
+  {
+    id: 'SELFTEST-12',
+    title: 'Row-level security switched off on notes',
+    apply: remove('alter table public.notes enable row level security;'),
+  },
+  {
+    id: 'SELFTEST-13',
+    title: 'Second-factor rule removed from notes',
+    apply: (sql) => sql.replace(/create policy notes_owner_with_second_factor[\s\S]*?;\n/, ''),
+  },
+  {
+    id: 'SELFTEST-14',
+    title: 'Default access left in place on notes',
+    apply: remove('revoke all on table public.notes from public, anon, authenticated;'),
+  },
+  {
+    id: 'SELFTEST-15',
+    title: 'Default permission left in place on note search',
+    apply: remove('revoke all on function public.search_notes(text, boolean, uuid) from public, anon, authenticated;'),
+  },
+  {
+    id: 'SELFTEST-16',
+    title: 'Searchable note text no longer derived from the document',
+    apply: remove("new.content_text := btrim(private.note_text(new.content, 0), E' \\n');"),
+  },
+  {
+    id: 'SELFTEST-17',
+    title: 'Owner allowed to write the searchable note text',
+    apply: (sql) =>
+      sql.replace(
+        'grant update (context_id, title, content, pinned, archived_at) on table public.notes',
+        'grant update (context_id, title, content, content_text, pinned, archived_at) on table public.notes',
+      ),
+  },
+  {
+    id: 'SELFTEST-18',
+    title: 'Note link check removed',
+    apply: (sql) => sql.replace(/if jsonb_path_exists\([\s\S]*?end if;/, ''),
+  },
+  {
+    id: 'SELFTEST-19',
+    title: 'Owner allowed to set note revision numbers',
+    apply: (sql) =>
+      sql.replace(
+        'grant update (context_id, title, content, pinned, archived_at) on table public.notes',
+        'grant update (context_id, title, content, pinned, archived_at, revision) on table public.notes',
+      ),
+  },
 ]
 
 /** Applies one mutation to a copy of the migrations. Throws if it changed nothing. */

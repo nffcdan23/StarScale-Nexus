@@ -36,7 +36,7 @@ project, and nothing leaves the computer.
    started again.
 2. Copy `.env.security.example` to `.env.security.local` and fill it in.
 3. Run `npm run test:security:real`. The last line gives passed, failed and
-   not executed counts out of the total (68 at Phase 2c-3a).
+   not executed counts out of the total (104 at Phase 3a).
 4. Commit the updated `docs/security-report.md` and
    `tests/security/real/results.json`, so the results travel back with Git.
 

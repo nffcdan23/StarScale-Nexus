@@ -1,4 +1,4 @@
-import { ids, secretNote } from './fixtures.mjs'
+import { ids, noteDoc, secretNote, secretNoteBody } from './fixtures.mjs'
 
 // The single list of who may do what. Each check is one SQL statement run as
 // one identity, with the outcome it must have. The same list is used against
@@ -38,6 +38,10 @@ const renameTasks = "update public.tasks set title = 'Changed'"
 const deleteTasks = 'delete from public.tasks'
 const callSummary = 'select public.tv_summary() as summary'
 const readIdentities = 'select user_id from private.identities'
+const readNotes = 'select id from public.notes'
+const addNote = "insert into public.notes (title) values ('New note')"
+const renameNotes = "update public.notes set title = 'Changed'"
+const searchNotes = (text) => `select * from public.search_notes('${text}')`
 
 // ---- The checks -----------------------------------------------------------
 
@@ -346,6 +350,215 @@ export const cases = [
     sql: callSummary,
     expect: refused(/caller is not allowed/),
   },
+
+  // Notes (migration 20261017090000_notes, Phase 3a). Owner-only with an
+  // authenticator code, exactly like tasks; the TV gets nothing.
+  { id: 'ANON-10', identity: 'anonymous', title: 'Cannot read notes', sql: readNotes, expect: tableRefused('notes') },
+  {
+    id: 'ANON-11',
+    identity: 'anonymous',
+    title: 'Cannot search notes',
+    sql: searchNotes('investor'),
+    expect: refused(/permission denied for function search_notes/),
+  },
+  { id: 'TV-14', identity: 'tv', title: 'Sees no notes', sql: readNotes, expect: seesRows(0) },
+  { id: 'TV-15', identity: 'tv', title: 'Cannot add a note', sql: addNote, expect: blockedByRules },
+  { id: 'TV-16', identity: 'tv', title: 'Cannot change any note', sql: renameNotes, expect: changesRows(0) },
+  { id: 'TV-17', identity: 'tv', title: 'Finds nothing when searching notes', sql: searchNotes('investor'), expect: seesRows(0) },
+  {
+    id: 'TV-18',
+    identity: 'tv',
+    title: 'TV summary contains no note titles or text',
+    sql: callSummary,
+    expect: passes((rows) => {
+      const text = JSON.stringify(rows[0]?.summary ?? null)
+      return ['Board meeting', 'Shopping list', secretNoteBody, 'Buy milk'].some((leak) => text.includes(leak))
+        ? 'the TV summary contains note content'
+        : null
+    }),
+  },
+  { id: 'TVCODE-05', identity: 'tvWithCode', title: 'Still sees no notes', sql: readNotes, expect: seesRows(0) },
+  { id: 'NOCODE-08', identity: 'ownerNoCode', title: 'Sees no notes', sql: readNotes, expect: seesRows(0) },
+  { id: 'NOCODE-09', identity: 'ownerNoCode', title: 'Cannot add a note', sql: addNote, expect: blockedByRules },
+  { id: 'NOCODE-10', identity: 'ownerNoCode', title: 'Finds nothing when searching notes', sql: searchNotes('investor'), expect: seesRows(0) },
+  { id: 'STRANGER-04', identity: 'strangerWithCode', title: 'Sees no notes', sql: readNotes, expect: seesRows(0) },
+
+  { id: 'NOTE-01', identity: 'ownerWithCode', title: 'Sees their own three notes and nobody else\'s', sql: readNotes, expect: seesRows(3) },
+  {
+    id: 'NOTE-02',
+    identity: 'ownerWithCode',
+    title: 'Can add a note with no context; the database sets the owner, revision and searchable text',
+    sql: `insert into public.notes (title, content) values ('Ideas', '${noteDoc('First idea')}')
+          returning owner_id, context_id, revision, content_text`,
+    expect: passes((rows) => {
+      const row = rows[0]
+      return row?.owner_id === ids.owner && row.context_id === null && row.revision === 1 && row.content_text === 'First idea'
+        ? null
+        : `unexpected new note: ${JSON.stringify(row)}`
+    }),
+  },
+  {
+    id: 'NOTE-03',
+    identity: 'ownerWithCode',
+    title: 'Can file a note under their own context, and take it out again',
+    sql: `update public.notes set context_id = case when context_id is null then '${ids.contextVisible}'::uuid end
+          where id in ('${ids.noteFiled}', '${ids.noteUncategorised}')`,
+    expect: changesRows(2),
+  },
+  {
+    id: 'NOTE-04',
+    identity: 'ownerWithCode',
+    title: 'Cannot file a note under another owner\'s context',
+    sql: `update public.notes set context_id = '${ids.contextOther}' where id = '${ids.noteUncategorised}'`,
+    expect: { errorCode: '23503' },
+  },
+  {
+    id: 'NOTE-05',
+    identity: 'ownerWithCode',
+    title: 'Cannot choose a note\'s owner',
+    sql: `insert into public.notes (owner_id, title) values ('${ids.otherOwner}', 'Planted')`,
+    expect: tableRefused('notes'),
+  },
+  {
+    id: 'NOTE-06',
+    identity: 'ownerWithCode',
+    title: 'Cannot change a note\'s owner',
+    sql: `update public.notes set owner_id = '${ids.otherOwner}' where id = '${ids.noteFiled}'`,
+    expect: tableRefused('notes'),
+  },
+  {
+    id: 'NOTE-07',
+    identity: 'ownerWithCode',
+    title: 'Cannot set a revision number',
+    sql: `update public.notes set revision = 99 where id = '${ids.noteFiled}'`,
+    expect: tableRefused('notes'),
+  },
+  {
+    id: 'NOTE-08',
+    identity: 'ownerWithCode',
+    title: 'Cannot set the creation or edit time',
+    sql: `update public.notes set created_at = '2020-01-01', updated_at = '2020-01-01' where id = '${ids.noteFiled}'`,
+    expect: tableRefused('notes'),
+  },
+  {
+    id: 'NOTE-09',
+    identity: 'ownerWithCode',
+    title: 'Cannot write the searchable text directly',
+    sql: `update public.notes set content_text = 'Something else' where id = '${ids.noteFiled}'`,
+    expect: tableRefused('notes'),
+  },
+  {
+    id: 'NOTE-10',
+    identity: 'ownerWithCode',
+    title: 'The searchable text always follows the document: headings, lists and line breaks',
+    sql: `update public.notes set content = '${JSON.stringify({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Plan' }] },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'One ' }, { type: 'text', marks: [{ type: 'bold' }], text: 'two' }, { type: 'hardBreak' }, { type: 'text', text: 'three' }],
+        },
+        {
+          type: 'taskList',
+          content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Call the bank' }] }] }],
+        },
+      ],
+    })}' where id = '${ids.noteFiled}' returning content_text`,
+    expect: passes((rows) =>
+      rows[0]?.content_text === 'Plan\nOne two\nthree\nCall the bank' ? null : `got ${JSON.stringify(rows[0]?.content_text)}`,
+    ),
+  },
+  {
+    id: 'NOTE-11',
+    identity: 'ownerWithCode',
+    title: 'Editing the title or text raises the revision',
+    sql: `update public.notes set title = 'Board meeting notes' where id = '${ids.noteFiled}' returning revision`,
+    expect: passes((rows) => (rows[0]?.revision === 2 ? null : `revision is ${rows[0]?.revision}`)),
+  },
+  {
+    id: 'NOTE-12',
+    identity: 'ownerWithCode',
+    title: 'Pinning or archiving leaves the revision alone',
+    sql: `update public.notes set pinned = true, archived_at = now() where id = '${ids.noteFiled}' returning revision`,
+    expect: passes((rows) => (rows[0]?.revision === 1 ? null : `revision is ${rows[0]?.revision}`)),
+  },
+  {
+    id: 'NOTE-13',
+    identity: 'ownerWithCode',
+    title: 'A save based on an older revision changes nothing',
+    sql: `update public.notes set title = 'Overwrite' where id = '${ids.noteFiled}' and revision = 0`,
+    expect: changesRows(0),
+  },
+  { id: 'NOTE-14', identity: 'ownerWithCode', title: 'Cannot delete notes', sql: 'delete from public.notes', expect: tableRefused('notes') },
+  {
+    id: 'NOTE-15',
+    identity: 'ownerWithCode',
+    title: 'Content that is not a document is rejected',
+    sql: `update public.notes set content = '{"type": "paragraph"}' where id = '${ids.noteFiled}'`,
+    expect: { errorCode: '23514' },
+  },
+  {
+    id: 'NOTE-16',
+    identity: 'ownerWithCode',
+    title: 'A link that is not a web or email address is rejected',
+    sql: `update public.notes set content = '${JSON.stringify({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }] }],
+    })}' where id = '${ids.noteFiled}'`,
+    expect: { errorCode: '23514' },
+  },
+  {
+    id: 'NOTE-17',
+    identity: 'ownerWithCode',
+    title: 'A title over 200 characters is rejected',
+    sql: `update public.notes set title = repeat('x', 201) where id = '${ids.noteFiled}'`,
+    expect: { errorCode: '23514' },
+  },
+  {
+    id: 'NOTE-18',
+    identity: 'ownerWithCode',
+    title: 'Cannot change another owner\'s note',
+    sql: `update public.notes set title = 'Changed' where id = '${ids.noteOther}'`,
+    expect: changesRows(0),
+  },
+  {
+    id: 'NOTE-19',
+    identity: 'ownerWithCode',
+    title: 'Search finds their own notes by word or word start, never archived or other owners\' notes',
+    sql: searchNotes('invest'),
+    expect: passes((rows) => {
+      const titles = rows.map((row) => row.title)
+      return JSON.stringify(titles) === JSON.stringify(['Board meeting']) ? null : `got ${JSON.stringify(titles)}`
+    }),
+  },
+  {
+    id: 'NOTE-20',
+    identity: 'ownerWithCode',
+    title: 'Search can include archived notes and keep to one context',
+    sql: `select title from public.search_notes('investor', true, '${ids.contextVisible}')`,
+    expect: passes((rows) => {
+      const titles = rows.map((row) => row.title).sort()
+      return JSON.stringify(titles) === JSON.stringify(['Board meeting', 'Old idea']) ? null : `got ${JSON.stringify(titles)}`
+    }),
+  },
+  {
+    id: 'NOTE-21',
+    identity: 'ownerWithCode',
+    title: 'Search snippets mark matches with characters that are not HTML',
+    sql: searchNotes('timeline'),
+    expect: passes((rows) => {
+      const snippet = rows[0]?.snippet ?? ''
+      return snippet.includes('timeline') && !snippet.includes('<') ? null : `got ${JSON.stringify(snippet)}`
+    }),
+  },
+  {
+    id: 'NOTE-22',
+    identity: 'ownerWithCode',
+    title: 'An overlong search is refused',
+    sql: `select * from public.search_notes(repeat('a', 201))`,
+    expect: { errorCode: '22023' },
+  },
 ]
 
 /**
@@ -362,4 +575,6 @@ export const realOnlyCases = [
   { id: 'REAL-06', title: 'A real TV sign-in gets the redacted summary and no table access' },
   { id: 'REAL-07', title: 'A real TV sign-in cannot write through the Data API' },
   { id: 'REAL-08', title: 'New sign-ups are refused' },
+  { id: 'REAL-09', title: 'After a real authenticator code, the owner can add and search a note but not forge its searchable text' },
+  { id: 'REAL-10', title: 'A real TV sign-in cannot read, search or add notes, and a visitor cannot search them' },
 ]

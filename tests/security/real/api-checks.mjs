@@ -5,9 +5,9 @@
 // except the authenticator steps, which the local settings had switched off.
 
 import { createHmac, randomUUID } from 'node:crypto'
-import { secretNote } from '../lib/fixtures.mjs'
+import { noteDoc, secretNote, secretNoteBody } from '../lib/fixtures.mjs'
 
-export const apiCheckIds = ['REAL-02', 'REAL-03', 'REAL-04', 'REAL-05', 'REAL-06', 'REAL-07', 'REAL-08']
+export const apiCheckIds = ['REAL-02', 'REAL-03', 'REAL-04', 'REAL-05', 'REAL-06', 'REAL-07', 'REAL-08', 'REAL-09', 'REAL-10']
 
 async function call(config, path, { method = 'GET', key = config.publishableKey, token, body } = {}) {
   const response = await fetch(`${config.apiUrl}${path}`, {
@@ -147,10 +147,22 @@ export async function runApiChecks(config, db) {
            ($1, $2, 'Visible task', $3, false), ($1, $2, 'Hidden task', null, true)`,
         [owner.id, contextId, secretNote],
       )
+      await db.query(`insert into public.notes (owner_id, title, content) values ($1, 'Private note', $2::jsonb)`, [
+        owner.id,
+        noteDoc(`Private thoughts ${secretNoteBody}`),
+      ])
     } catch (error) {
       // Without the test sign-ins none of these checks can run. Record them
       // as not executed, so the report never shows an older result as current.
       return apiCheckIds.map((id) => ({ id, status: 'not-executed', detail: `setup failed: ${error.message}` }))
+    }
+
+    // The owner signs in with a password and an authenticator code once; the
+    // checks that need that session share it.
+    let strongToken = null
+    const ownerWithCode = async () => {
+      if (!strongToken) strongToken = await passSecondFactor(config, await signIn(config, owner, 'owner'))
+      return strongToken
     }
 
     const tasksPath = '/rest/v1/tasks?select=id,title'
@@ -179,8 +191,7 @@ export async function runApiChecks(config, db) {
     })
 
     await check('REAL-05', async () => {
-      const ownerToken = await signIn(config, owner, 'owner')
-      const strongToken = await passSecondFactor(config, ownerToken)
+      const strongToken = await ownerWithCode()
       const read = await call(config, tasksPath, { token: strongToken })
       if (read.status !== 200 || !Array.isArray(read.data) || read.data.length !== 2) {
         return `expected 2 tasks after the authenticator code, got ${describe(read)} ${JSON.stringify(read.data)}`
@@ -225,6 +236,55 @@ export async function runApiChecks(config, db) {
       const strayId = response.data?.user?.id ?? response.data?.id
       if (strayId) await deleteUser(config, strayId)
       return `a new sign-up was accepted (${describe(response)}); switch sign-ups off in supabase/config.toml and restart the stack`
+    })
+
+    await check('REAL-09', async () => {
+      const token = await ownerWithCode()
+      const created = await call(config, '/rest/v1/notes', {
+        method: 'POST',
+        token,
+        body: { title: 'Real note', content: JSON.parse(noteDoc('Quarterly investor review')) },
+      })
+      const note = created.data?.[0]
+      if (created.status !== 201 || !note) return `could not add a note, ${describe(created)}`
+      if (note.owner_id !== owner.id || note.context_id !== null || note.revision !== 1) {
+        return `the new note has the wrong owner, context or revision: ${JSON.stringify(note)}`
+      }
+      if (note.content_text !== 'Quarterly investor review') return `searchable text was not derived: ${JSON.stringify(note.content_text)}`
+
+      const found = await call(config, '/rest/v1/rpc/search_notes', { method: 'POST', token, body: { search_text: 'quarter' } })
+      if (found.status !== 200 || !found.data?.some((row) => row.id === note.id)) {
+        return `search did not find the note, ${describe(found)}`
+      }
+
+      const forged = await call(config, `/rest/v1/notes?id=eq.${note.id}`, {
+        method: 'PATCH',
+        token,
+        body: { content_text: 'Forged text' },
+      })
+      return refused(forged) ? null : `the owner could write the searchable text directly, ${describe(forged)}`
+    })
+
+    await check('REAL-10', async () => {
+      const tvToken = await signIn(config, tv, 'TV')
+      const read = await call(config, '/rest/v1/notes?select=id,title', { token: tvToken })
+      if (read.status !== 200 || !Array.isArray(read.data) || read.data.length !== 0) {
+        return `the TV sign-in could read notes, ${describe(read)} ${JSON.stringify(read.data)}`
+      }
+      const search = await call(config, '/rest/v1/rpc/search_notes', {
+        method: 'POST',
+        token: tvToken,
+        body: { search_text: secretNoteBody },
+      })
+      if (search.status !== 200 || !Array.isArray(search.data) || search.data.length !== 0) {
+        return `the TV sign-in could search notes, ${describe(search)} ${JSON.stringify(search.data)}`
+      }
+      const write = await call(config, '/rest/v1/notes', { method: 'POST', token: tvToken, body: { title: 'From the TV' } })
+      if (!refused(write)) return `the TV sign-in could add a note, ${describe(write)}`
+      const anonymous = await call(config, '/rest/v1/rpc/search_notes', { method: 'POST', body: { search_text: 'private' } })
+      return refused(anonymous) || anonymous.status === 404
+        ? null
+        : `a visitor with only the public key could search notes, ${describe(anonymous)}`
     })
   } finally {
     // Removing a test sign-in also removes its contexts and tasks.

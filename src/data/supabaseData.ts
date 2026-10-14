@@ -5,6 +5,13 @@ import {
   type Context,
   type ContextsService,
   type DataServices,
+  type Note,
+  type NoteChanges,
+  type NoteDoc,
+  type NoteSearchResult,
+  type NotesService,
+  type NoteSummary,
+  type SnippetPart,
   type Task,
   type TaskChanges,
   type SummaryService,
@@ -279,6 +286,182 @@ function summaryService(client: SupabaseClient): SummaryService {
   }
 }
 
+const noteSummaryColumns = 'id, context_id, title, preview, pinned, revision, created_at, updated_at, archived_at'
+const noteColumns = `${noteSummaryColumns}, content, content_text`
+
+interface NoteSummaryRow {
+  id: string
+  context_id: string | null
+  title: string
+  preview: string
+  pinned: boolean
+  revision: number
+  created_at: string
+  updated_at: string
+  archived_at: string | null
+}
+
+interface NoteRow extends NoteSummaryRow {
+  content: unknown
+  content_text: string
+}
+
+const toNoteSummary = (row: NoteSummaryRow): NoteSummary => ({
+  id: row.id,
+  title: row.title,
+  contextId: row.context_id,
+  pinned: row.pinned,
+  preview: row.preview,
+  revision: row.revision,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  archivedAt: row.archived_at,
+})
+
+const isNoteDoc = (value: unknown): value is NoteDoc =>
+  typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'doc'
+
+function toNote(row: NoteRow): Note {
+  if (!isNoteDoc(row.content)) throw new DataError('unknown', 'Could not read the note: it is not in the expected form.')
+  return { ...toNoteSummary(row), content: row.content, text: row.content_text }
+}
+
+const MATCH_START = '\uE000'
+const MATCH_END = '\uE001'
+
+/**
+ * Splits a search snippet at the database's match markers (the private-use
+ * characters U+E000 and U+E001) into plain parts. The result is shown as
+ * text, never as HTML.
+ */
+export function toSnippet(value: string): SnippetPart[] {
+  const parts: SnippetPart[] = []
+  const add = (text: string, match: boolean) => {
+    const clean = text.replaceAll(MATCH_START, '').replaceAll(MATCH_END, '')
+    if (clean) parts.push({ text: clean, match })
+  }
+  value.split(MATCH_START).forEach((piece, index) => {
+    if (index === 0) return add(piece, false)
+    const end = piece.indexOf(MATCH_END)
+    if (end === -1) return add(piece, false)
+    add(piece.slice(0, end), true)
+    add(piece.slice(end + 1), false)
+  })
+  return parts
+}
+
+/** Turns the owner's note edits into database columns, checking them first. */
+export function noteChangesToRow(changes: NoteChanges): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (changes.title !== undefined) {
+    if (changes.title.length > limits.noteTitle) throw new DataError('invalid', `Keep the title to ${limits.noteTitle} characters.`)
+    row.title = changes.title
+  }
+  if (changes.content !== undefined) {
+    if (!isNoteDoc(changes.content)) throw new DataError('invalid', 'Could not save the note: its content is not in the expected form.')
+    if (new TextEncoder().encode(JSON.stringify(changes.content)).length > limits.noteContentBytes) {
+      throw new DataError('invalid', 'This note is too long to save. Split it into two notes.')
+    }
+    row.content = changes.content
+  }
+  if (changes.contextId !== undefined) row.context_id = changes.contextId
+  return row
+}
+
+function notesService(client: SupabaseClient): NotesService {
+  const update = async (id: string, changes: Record<string, unknown>, action: string) => {
+    const { data, error } = await client.from('notes').update(changes).eq('id', id).select(noteSummaryColumns).single()
+    if (error) throw toDataError(error, action)
+    return toNoteSummary(data as NoteSummaryRow)
+  }
+
+  return {
+    async list({ archived = false } = {}) {
+      let query = client.from('notes').select(noteSummaryColumns)
+      query = archived
+        ? query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
+        : query.is('archived_at', null).order('pinned', { ascending: false }).order('updated_at', { ascending: false })
+      const { data, error } = await query
+      if (error) throw toDataError(error, 'load your notes')
+      return (data as NoteSummaryRow[]).map(toNoteSummary)
+    },
+
+    async get(id) {
+      const { data, error } = await client.from('notes').select(noteColumns).eq('id', id).single()
+      if (error) throw toDataError(error, 'open the note')
+      return toNote(data as NoteRow)
+    },
+
+    async create(changes = {}) {
+      const row = noteChangesToRow(changes)
+      // The id is made here, so a retried request can never create a second copy.
+      const id = crypto.randomUUID()
+      const { data, error } = await client
+        .from('notes')
+        .insert({ id, ...row })
+        .select(noteColumns)
+        .single()
+      if (!error) return toNote(data as NoteRow)
+      if (isDuplicate(error, 'notes_pkey')) {
+        const existing = await client.from('notes').select(noteColumns).eq('id', id).single()
+        if (!existing.error) return toNote(existing.data as NoteRow)
+      }
+      throw toDataError(error, 'create the note')
+    },
+
+    async save(id, changes, baseRevision) {
+      const row = noteChangesToRow(changes)
+      if (Object.keys(row).length === 0) throw new DataError('invalid', 'There were no changes to save.')
+      // Only saves if nobody else has saved since this version was loaded.
+      const { data, error } = await client
+        .from('notes')
+        .update(row)
+        .eq('id', id)
+        .eq('revision', baseRevision)
+        .select(noteColumns)
+        .maybeSingle()
+      if (error) throw toDataError(error, 'save the note')
+      if (data) return toNote(data as NoteRow)
+
+      const current = await client.from('notes').select('id, revision').eq('id', id).maybeSingle()
+      if (current.error) throw toDataError(current.error, 'save the note')
+      if (!current.data) throw new DataError('missing', 'Could not save the note: it no longer exists.')
+      throw new DataError('conflict', 'This note was changed on another device since you opened it. Nothing was overwritten.')
+    },
+
+    setPinned: (id, pinned) => update(id, { pinned }, pinned ? 'pin the note' : 'unpin the note'),
+    setArchived: (id, archived) =>
+      update(id, { archived_at: archived ? new Date().toISOString() : null }, archived ? 'archive the note' : 'restore the note'),
+
+    async search(text, { includeArchived = false, contextId } = {}) {
+      if (text.length > limits.noteSearch) throw new DataError('invalid', `Keep searches to ${limits.noteSearch} characters.`)
+      if (!text.trim()) return []
+      const { data, error } = await client.rpc('search_notes', {
+        search_text: text,
+        include_archived: includeArchived,
+        context_filter: contextId ?? null,
+      })
+      if (error) throw toDataError(error, 'search your notes')
+      return (data as Array<NoteSummaryRow & { snippet: string | null }>).map(
+        (row): NoteSearchResult => ({
+          id: row.id,
+          title: row.title,
+          contextId: row.context_id,
+          pinned: row.pinned,
+          archivedAt: row.archived_at,
+          updatedAt: row.updated_at,
+          snippet: toSnippet(row.snippet ?? ''),
+        }),
+      )
+    },
+  }
+}
+
 export function createSupabaseDataServices(client: SupabaseClient): DataServices {
-  return { contexts: contextsService(client), tasks: tasksService(client), summary: summaryService(client) }
+  return {
+    contexts: contextsService(client),
+    tasks: tasksService(client),
+    summary: summaryService(client),
+    notes: notesService(client),
+  }
 }

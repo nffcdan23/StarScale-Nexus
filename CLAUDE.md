@@ -157,6 +157,38 @@ plain English, define technical terms, and go one step at a time.
   until the mouse moves or a key is pressed; Escape closes it; sign-out asks
   first with Cancel focused.
 
+## Notes (Phase 3)
+
+- Plan approved 14 October 2026: 3a database and data layer; 3b workspace
+  (sidebar, notes list, editor) with TipTap; 3c autosave, local copies of
+  unsaved changes, offline retry and revision conflicts; 3d search and
+  filters; 3e backup and tested restore. Each needs its own go-ahead.
+- `public.notes` (migration `20261017090000_notes.sql`): `content` is the
+  editor's JSON document, never HTML. `content_text` (and `preview`,
+  `search`) are derived by the database from it on every write; no caller
+  can write them. The trigger also checks the document's shape and size and
+  allows only http(s) and mailto links. Context is optional (null shows as
+  Uncategorised) but must be the owner's own when set. `revision` and
+  `updated_at` change only for edits to title, text or context, not for
+  pinning or archiving. Owner-only with an authenticator code, no delete, the
+  TV gets nothing and `tv_summary()` never mentions notes.
+- `search_notes(search_text, include_archived, context_filter)`: full-text
+  search, every word also a prefix, snippets marked with U+E000 and U+E001
+  (turned into plain parts by `toSnippet`, never HTML). The future assistant
+  searches through this same function.
+- Data layer: `notes` in `src/data/types.ts` and `supabaseData.ts`;
+  `save` takes the revision it was based on and throws a "conflict"
+  DataError if the note changed elsewhere. The fake imitates the same rules.
+- Editor (3b, approved, not installed): TipTap, free MIT core only, feeling
+  closer to Apple Notes or Notion than Markdown. Confirm exact packages and
+  licences with the owner before installing.
+- Backups: before important notes are stored, 3e must give a tested backup
+  and restore. Keep two things apart: a full database backup (everything,
+  for disaster recovery, restored into a fresh database and compared) and a
+  note export (readable copies of notes, for the owner's own use).
+- The written rules (`static-checks.mjs`) now cover functions with inputs
+  and `create or replace`; before Phase 3a they silently skipped them.
+
 ## Before each commit
 
 - Check `git status` for unrelated or sensitive files. `.env` files, keys,
@@ -191,10 +223,11 @@ plain English, define technical terms, and go one step at a time.
   a `revoke all`, and explicit column-by-column grants in the same file.
 - `tests/security/`: the security checks. `docs/security-report.md`: their
   generated results.
-- Database model so far: `contexts` and `tasks` in `public`; `private.identities`
-  registers which sign-ins are the owner or a TV; `public.tv_summary()` is the
-  only function that reads past the access rules. Nothing can be deleted
-  through the Data API, only archived.
+- Database model so far: `contexts`, `tasks` and `notes` in `public`;
+  `private.identities` registers which sign-ins are the owner or a TV;
+  `public.tv_summary()` is the only function that reads past the access rules
+  (`public.search_notes()` runs with the caller's rights). Nothing can be
+  deleted through the Data API, only archived.
 - To add a section: one entry in `src/app/navigation.ts` and one route in
   `src/app/routes.tsx`. Only sections that work appear in the sidebar.
 - To replace the temporary backdrop or logo: put the file in `public/` and
@@ -270,9 +303,10 @@ implement any of these until the owner asks.
   verified on the PC (68 of 68 real checks).
 - 2c-3b Live Mission Control: checked by hand on the PC 14 October 2026.
   Its integration test results were not recorded in the repository.
-- 2c-3c Live TV: built on the Mac 14 October 2026; awaiting PC verification
-  (no database change; 68 real checks still expected). Next step needs the
-  owner's go-ahead.
+- 2c-3c Live TV: verified on the PC 14 October 2026 (owner's manual tests).
+- 3a Notes database, search, security checks and data layer: built on the
+  Mac 14 October 2026; awaiting PC verification (104 real checks expected).
+  Next: 3b, which needs its own go-ahead and package approval.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

@@ -1,5 +1,16 @@
-import { taskChangesToRow } from '../data/supabaseData'
-import { DataError, type Context, type DataServices, type Priority, type Task, type TaskView } from '../data/types'
+import { noteChangesToRow, taskChangesToRow } from '../data/supabaseData'
+import {
+  DataError,
+  limits,
+  type Context,
+  type DataServices,
+  type Note,
+  type NoteDoc,
+  type NoteSummary,
+  type Priority,
+  type Task,
+  type TaskView,
+} from '../data/types'
 import { localDateString } from '../lib/deadlines'
 
 // An in-memory stand-in for the database, so the screens can be tested on a
@@ -12,12 +23,30 @@ const priorityRank: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
 const deadlineDay = (task: Task) =>
   !task.deadline ? null : task.deadline.kind === 'date' ? task.deadline.date : localDateString(new Date(task.deadline.at))
 
+/** The same rule as the database's private.note_text: text nodes, with line breaks between blocks. */
+export function fakeNoteText(node: unknown): string {
+  if (typeof node !== 'object' || node === null) return ''
+  const { type, text, content } = node as { type?: string; text?: string; content?: unknown }
+  if (type === 'text') return text ?? ''
+  if (type === 'hardBreak') return '\n'
+  if (!Array.isArray(content)) return ''
+  const inline = content.every((child) => ['text', 'hardBreak'].includes((child as { type?: string })?.type ?? ''))
+  return content.map(fakeNoteText).join(inline ? '' : '\n')
+}
+
+/** A one-paragraph note document, for tests. */
+export const paragraphDoc = (text: string): NoteDoc => ({
+  type: 'doc',
+  content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+})
+
 let clock = Date.parse('2026-10-14T09:00:00Z')
 const now = () => new Date((clock += 1000)).toISOString()
 
 export class FakeData implements DataServices {
   contextRows: Context[] = []
   taskRows: Task[] = []
+  noteRows: Note[] = []
   /** When set, the next write fails with this error (then clears). */
   failNextWrite: DataError | null = null
   /** While set, every read fails with this error. */
@@ -189,6 +218,146 @@ export class FakeData implements DataServices {
           deadline: task.deadline,
         })),
       }
+    },
+  }
+
+  addNote(changes: { title?: string; text?: string; contextId?: string | null; pinned?: boolean; archivedAt?: string | null } = {}): Note {
+    const stamp = now()
+    const content = paragraphDoc(changes.text ?? '')
+    const text = fakeNoteText(content).trim()
+    const note: Note = {
+      id: crypto.randomUUID(),
+      title: changes.title ?? '',
+      contextId: changes.contextId ?? null,
+      pinned: changes.pinned ?? false,
+      preview: text.slice(0, 200),
+      revision: 1,
+      createdAt: stamp,
+      updatedAt: stamp,
+      archivedAt: changes.archivedAt ?? null,
+      content,
+      text,
+    }
+    this.noteRows.push(note)
+    return note
+  }
+
+  private findNote(id: string) {
+    const note = this.noteRows.find((entry) => entry.id === id)
+    if (!note) throw new DataError('missing', 'Could not change the note: it no longer exists.')
+    return note
+  }
+
+  /** Applies edits as the database would: derived text, revision and edit time follow real edits only. */
+  private applyNoteChanges(note: Note, changes: Parameters<DataServices['notes']['save']>[1]) {
+    if (changes.contextId) this.findContext(changes.contextId)
+    const edited =
+      (changes.title !== undefined && changes.title !== note.title) ||
+      (changes.content !== undefined && JSON.stringify(changes.content) !== JSON.stringify(note.content)) ||
+      (changes.contextId !== undefined && changes.contextId !== note.contextId)
+    if (changes.title !== undefined) note.title = changes.title
+    if (changes.content !== undefined) note.content = changes.content
+    if (changes.contextId !== undefined) note.contextId = changes.contextId
+    note.text = fakeNoteText(note.content).trim()
+    note.preview = note.text.slice(0, 200)
+    if (edited) {
+      note.revision += 1
+      note.updatedAt = now()
+    }
+  }
+
+  private noteSummary(note: Note): NoteSummary {
+    return {
+      id: note.id,
+      title: note.title,
+      contextId: note.contextId,
+      pinned: note.pinned,
+      preview: note.preview,
+      revision: note.revision,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+      archivedAt: note.archivedAt,
+    }
+  }
+
+  /**
+   * An imitation of the notes table and search_notes(), so screens can be
+   * tested here. Access rules, derived text and search ranking are the
+   * database's job and are proved by the security checks, never by this.
+   */
+  notes: DataServices['notes'] = {
+    list: async ({ archived = false } = {}) => {
+      this.checkRead()
+      return this.noteRows
+        .filter((note) => Boolean(note.archivedAt) === archived)
+        .sort((a, b) =>
+          archived
+            ? (b.archivedAt ?? '').localeCompare(a.archivedAt ?? '')
+            : Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt),
+        )
+        .map((note) => this.noteSummary(note))
+    },
+    get: async (id) => {
+      this.checkRead()
+      return structuredClone(this.findNote(id))
+    },
+    create: async (changes = {}) => {
+      noteChangesToRow(changes)
+      this.takeFailure()
+      const note = this.addNote({ contextId: changes.contextId ?? null })
+      this.applyNoteChanges(note, { title: changes.title, content: changes.content })
+      note.revision = 1
+      return structuredClone(note)
+    },
+    save: async (id, changes, baseRevision) => {
+      const row = noteChangesToRow(changes)
+      if (Object.keys(row).length === 0) throw new DataError('invalid', 'There were no changes to save.')
+      this.takeFailure()
+      const note = this.findNote(id)
+      if (note.revision !== baseRevision) {
+        throw new DataError('conflict', 'This note was changed on another device since you opened it. Nothing was overwritten.')
+      }
+      this.applyNoteChanges(note, changes)
+      return structuredClone(note)
+    },
+    setPinned: async (id, pinned) => {
+      this.takeFailure()
+      const note = this.findNote(id)
+      note.pinned = pinned
+      return this.noteSummary(note)
+    },
+    setArchived: async (id, archived) => {
+      this.takeFailure()
+      const note = this.findNote(id)
+      note.archivedAt = archived ? now() : null
+      return this.noteSummary(note)
+    },
+    search: async (text, { includeArchived = false, contextId } = {}) => {
+      if (text.length > limits.noteSearch) throw new DataError('invalid', `Keep searches to ${limits.noteSearch} characters.`)
+      this.checkRead()
+      const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+      if (words.length === 0) return []
+      const matches = (value: string) => {
+        const tokens = value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+        return words.every((word) => tokens.some((token) => token.startsWith(word)))
+      }
+      return this.noteRows
+        .filter((note) => (includeArchived || !note.archivedAt) && (!contextId || note.contextId === contextId))
+        .filter((note) => matches(`${note.title} ${note.text}`))
+        .sort((a, b) => Number(matches(b.title)) - Number(matches(a.title)) || b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, 50)
+        .map((note) => ({
+          id: note.id,
+          title: note.title,
+          contextId: note.contextId,
+          pinned: note.pinned,
+          archivedAt: note.archivedAt,
+          updatedAt: note.updatedAt,
+          snippet: note.text
+            .split(/(\s+)/)
+            .slice(0, 48)
+            .map((piece) => ({ text: piece, match: words.some((word) => piece.toLowerCase().startsWith(word)) })),
+        }))
     },
   }
 }

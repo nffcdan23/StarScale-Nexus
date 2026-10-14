@@ -82,12 +82,14 @@ export async function runReal({ suite, fingerprint, expectedIds }) {
           and exists (select 1 from information_schema.columns
                       where table_schema = 'public' and table_name = 'tasks' and column_name = 'due_on')
           and pg_get_functiondef('public.tv_summary()'::regprocedure) like '%''due_on''%'
+          and to_regclass('public.notes') is not null
+          and to_regprocedure('public.search_notes(text, boolean, uuid)') is not null
         as ok`,
     )
     results.push({
       id: 'REAL-01',
       status: applied.rows[0].ok ? 'passed' : 'failed',
-      detail: applied.rows[0].ok ? '' : 'a migration is missing: check the tasks table, tasks.due_on and that tv_summary returns due_on',
+      detail: applied.rows[0].ok ? '' : 'a migration is missing: check tasks, tasks.due_on, that tv_summary returns due_on, notes and search_notes',
     })
 
     // The same access checks as the simulated run, now against Supabase's own

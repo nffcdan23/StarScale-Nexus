@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import { slugFor } from './slug'
-import { createSupabaseDataServices, toDataError } from './supabaseData'
+import { createSupabaseDataServices, toDataError, toSnippet } from './supabaseData'
+import { fakeNoteText } from '../test/fakeData'
+import type { NoteDoc } from './types'
 
 // The real data layer, run against a stand-in for the Supabase client that
 // records what was asked of it. This checks the requests and the handling of
@@ -16,7 +18,7 @@ function recordingClient(replies: Reply[]) {
       const call = { table, steps: [] as Array<[string, unknown[]]> }
       calls.push(call)
       const builder: Record<string, unknown> = {}
-      for (const method of ['select', 'insert', 'update', 'eq', 'is', 'not', 'gte', 'order', 'limit', 'single']) {
+      for (const method of ['select', 'insert', 'update', 'eq', 'is', 'not', 'gte', 'order', 'limit', 'single', 'maybeSingle']) {
         builder[method] = (...args: unknown[]) => {
           call.steps.push([method, args])
           return builder
@@ -278,5 +280,136 @@ describe('TV summary', () => {
   it('reports a refusal plainly', async () => {
     const { services } = recordingClient([{ error: { code: '42501', message: 'tv_summary: caller is not allowed' } }])
     await expect(services.summary.get()).rejects.toThrow('Nexus refused to load the summary')
+  })
+})
+
+describe('notes', () => {
+  const doc: NoteDoc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Quarterly review' }] }] }
+  const noteRow = {
+    id: 'n1',
+    context_id: null,
+    title: 'Plans',
+    preview: 'Quarterly review',
+    pinned: false,
+    revision: 3,
+    created_at: 'a',
+    updated_at: 'b',
+    archived_at: null,
+    content: doc,
+    content_text: 'Quarterly review',
+  }
+
+  it('lists active notes pinned first then most recently edited, without loading whole notes', async () => {
+    const { services, calls } = recordingClient([{ data: [] }, { data: [] }])
+    await services.notes.list()
+    await services.notes.list({ archived: true })
+    const columns = calls[0].steps.find(([name]) => name === 'select')![1][0] as string
+    expect(columns).not.toContain('content')
+    expect(calls[0].steps).toContainEqual(['is', ['archived_at', null]])
+    expect(calls[0].steps.filter(([name]) => name === 'order')).toEqual([
+      ['order', ['pinned', { ascending: false }]],
+      ['order', ['updated_at', { ascending: false }]],
+    ])
+    expect(calls[1].steps).toContainEqual(['not', ['archived_at', 'is', null]])
+  })
+
+  it('creates a note with an id made on the device and no context unless one is chosen', async () => {
+    const { services, calls } = recordingClient([{ data: noteRow }])
+    const note = await services.notes.create({ title: 'Plans', content: doc })
+    const inserted = calls[0].steps.find(([name]) => name === 'insert')![1][0] as Record<string, unknown>
+    expect(Object.keys(inserted).sort()).toEqual(['content', 'id', 'title'])
+    expect(note).toMatchObject({ id: 'n1', contextId: null, text: 'Quarterly review', revision: 3 })
+  })
+
+  it('never sends the searchable text, the owner or the revision', async () => {
+    const { services, calls } = recordingClient([{ data: noteRow }])
+    await services.notes.save('n1', { title: 'New', content: doc, contextId: 'c1' }, 3)
+    const update = calls[0].steps.find(([name]) => name === 'update')![1][0] as Record<string, unknown>
+    expect(Object.keys(update).sort()).toEqual(['content', 'context_id', 'title'])
+  })
+
+  it('saves only if the note is still at the revision it was loaded at', async () => {
+    const { services, calls } = recordingClient([{ data: noteRow }])
+    await services.notes.save('n1', { title: 'New' }, 3)
+    expect(calls[0].steps).toContainEqual(['eq', ['id', 'n1']])
+    expect(calls[0].steps).toContainEqual(['eq', ['revision', 3]])
+  })
+
+  it('reports a conflict when another device saved first, and nothing is overwritten', async () => {
+    const { services } = recordingClient([{ data: null }, { data: { id: 'n1', revision: 4 } }])
+    await expect(services.notes.save('n1', { title: 'New' }, 3)).rejects.toMatchObject({ kind: 'conflict' })
+  })
+
+  it('reports a note that no longer exists', async () => {
+    const { services } = recordingClient([{ data: null }, { data: null }])
+    await expect(services.notes.save('n1', { title: 'New' }, 3)).rejects.toMatchObject({ kind: 'missing' })
+  })
+
+  it('refuses an overlong title or content that is not a document before asking the database', async () => {
+    const { services, calls } = recordingClient([])
+    await expect(services.notes.save('n1', { title: 'x'.repeat(201) }, 1)).rejects.toThrow('Keep the title to 200 characters.')
+    await expect(services.notes.save('n1', { content: { type: 'paragraph' } as never }, 1)).rejects.toThrow('not in the expected form')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('refuses a note too long to store', async () => {
+    const { services, calls } = recordingClient([])
+    const huge = { type: 'doc' as const, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x'.repeat(1_000_001) }] }] }
+    await expect(services.notes.create({ content: huge })).rejects.toThrow('too long to save')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('pins and archives without sending anything else', async () => {
+    const { services, calls } = recordingClient([{ data: noteRow }, { data: noteRow }, { data: noteRow }])
+    await services.notes.setPinned('n1', true)
+    await services.notes.setArchived('n1', true)
+    await services.notes.setArchived('n1', false)
+    const updates = calls.map((call) => call.steps.find(([name]) => name === 'update')![1][0] as Record<string, unknown>)
+    expect(updates[0]).toEqual({ pinned: true })
+    expect(Object.keys(updates[1])).toEqual(['archived_at'])
+    expect(updates[2]).toEqual({ archived_at: null })
+  })
+
+  it('searches through the database function and turns snippets into plain parts', async () => {
+    const { services, calls } = recordingClient([
+      { data: [{ ...noteRow, snippet: 'Our \uE000quarterly\uE001 review' }] },
+    ])
+    const results = await services.notes.search('quarter', { contextId: 'c1' })
+    expect(calls[0]).toEqual({
+      table: 'rpc:search_notes',
+      steps: [['rpc', [{ search_text: 'quarter', include_archived: false, context_filter: 'c1' }]]],
+    })
+    expect(results[0].snippet).toEqual([
+      { text: 'Our ', match: false },
+      { text: 'quarterly', match: true },
+      { text: ' review', match: false },
+    ])
+  })
+
+  it('does not ask the database about an empty search, and refuses an overlong one', async () => {
+    const { services, calls } = recordingClient([])
+    expect(await services.notes.search('   ')).toEqual([])
+    await expect(services.notes.search('a'.repeat(201))).rejects.toThrow('Keep searches to 200 characters.')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('treats markers it cannot pair as ordinary text, never as formatting', () => {
+    expect(toSnippet('a \uE000b')).toEqual([{ text: 'a ', match: false }, { text: 'b', match: false }])
+    expect(toSnippet('<b>x</b> \uE000y\uE001')).toEqual([
+      { text: '<b>x</b> ', match: false },
+      { text: 'y', match: true },
+    ])
+  })
+
+  it('the test imitation derives text by the same rule as the database (security check NOTE-10)', () => {
+    const document = {
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Plan' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'One ' }, { type: 'text', text: 'two' }, { type: 'hardBreak' }, { type: 'text', text: 'three' }] },
+        { type: 'taskList', content: [{ type: 'taskItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Call the bank' }] }] }] },
+      ],
+    }
+    expect(fakeNoteText(document)).toBe('Plan\nOne two\nthree\nCall the bank')
   })
 })
