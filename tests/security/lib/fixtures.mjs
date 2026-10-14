@@ -9,6 +9,8 @@ export const ids = {
   contextVisible: 'aaaaaaaa-0000-4000-8000-000000000001',
   contextPrivate: 'aaaaaaaa-0000-4000-8000-000000000002',
   contextOther: 'aaaaaaaa-0000-4000-8000-000000000003',
+  /** Created only by the checks that need it, not by seedSql. */
+  contextArchived: 'aaaaaaaa-0000-4000-8000-000000000004',
   taskVisible: 'bbbbbbbb-0000-4000-8000-000000000001',
   taskDone: 'bbbbbbbb-0000-4000-8000-000000000004',
   taskArchived: 'bbbbbbbb-0000-4000-8000-000000000005',

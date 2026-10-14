@@ -3,7 +3,8 @@
  *
  * "db" is anything with exec(sql) and query(sql) that returns
  * { rows, affectedRows }. Each check runs in its own transaction: load the
- * made-up records as administrator, switch to the identity being tested the
+ * made-up records as administrator (plus the check's own "setup" records, if
+ * it has any), switch to the identity being tested the
  * same way the Supabase Data API does, run the statement, then roll
  * everything back.
  */
@@ -17,6 +18,7 @@ export async function runCases(db, { cases, identities, seedSql }) {
     await db.exec('begin')
     try {
       await db.exec(seedSql)
+      if (testCase.setup) await db.exec(testCase.setup)
       await db.exec(`set local role ${identity.role}`)
       await db.query("select set_config('request.jwt.claims', $1, true)", [
         JSON.stringify(identity.claims),

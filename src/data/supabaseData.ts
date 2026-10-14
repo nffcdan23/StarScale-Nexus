@@ -7,8 +7,11 @@ import {
   type DataServices,
   type Task,
   type TaskChanges,
+  type SummaryService,
   type TasksService,
   type TaskView,
+  type TvSummary,
+  type TvTask,
   limits,
 } from './types'
 
@@ -217,6 +220,53 @@ function tasksService(client: SupabaseClient): TasksService {
   }
 }
 
+const priorities = new Set(['low', 'medium', 'high'])
+const isText = (value: unknown): value is string => typeof value === 'string'
+
+/**
+ * Reads the summary exactly as the database sent it. Anything unexpected is
+ * refused rather than guessed at, so the TV never shows a half-understood reply.
+ */
+export function toTvSummary(value: unknown): TvSummary {
+  const reply = value as { generated_at?: unknown; tasks?: unknown } | null
+  if (!reply || !isText(reply.generated_at) || !Array.isArray(reply.tasks)) {
+    throw new DataError('unknown', 'Could not read the summary: the database replied in an unexpected form.')
+  }
+  const tasks = reply.tasks.map((entry): TvTask => {
+    const task = entry as Record<string, unknown>
+    const dueOn = task.due_on ?? null
+    const dueAt = task.due_at ?? null
+    if (
+      !isText(task.title) ||
+      !isText(task.context) ||
+      !priorities.has(task.priority as string) ||
+      (dueOn !== null && !isText(dueOn)) ||
+      (dueAt !== null && !isText(dueAt))
+    ) {
+      throw new DataError('unknown', 'Could not read the summary: the database replied in an unexpected form.')
+    }
+    return {
+      title: task.title,
+      context: task.context,
+      priority: task.priority as TvTask['priority'],
+      deadline: dueOn ? { kind: 'date', date: dueOn } : dueAt ? { kind: 'time', at: dueAt } : null,
+    }
+  })
+  return { generatedAt: reply.generated_at, tasks }
+}
+
+function summaryService(client: SupabaseClient): SummaryService {
+  return {
+    // Which tasks appear, and which fields, is decided by the database
+    // function tv_summary(); nothing is filtered or removed here.
+    async get() {
+      const { data, error } = await client.rpc('tv_summary')
+      if (error) throw toDataError(error, 'load the summary')
+      return toTvSummary(data)
+    },
+  }
+}
+
 export function createSupabaseDataServices(client: SupabaseClient): DataServices {
-  return { contexts: contextsService(client), tasks: tasksService(client) }
+  return { contexts: contextsService(client), tasks: tasksService(client), summary: summaryService(client) }
 }

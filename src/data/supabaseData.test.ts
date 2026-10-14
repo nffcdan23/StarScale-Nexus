@@ -28,6 +28,15 @@ function recordingClient(replies: Reply[]) {
       }
       return builder
     },
+    rpc(name: string, ...args: unknown[]) {
+      calls.push({ table: `rpc:${name}`, steps: [['rpc', args]] })
+      return {
+        then: (resolve: (value: Reply) => void) => {
+          const reply = replies.shift() ?? { data: null, error: null }
+          resolve({ data: reply.data ?? null, error: reply.error ?? null })
+        },
+      }
+    },
   }
   return { services: createSupabaseDataServices(client as unknown as SupabaseClient), calls }
 }
@@ -206,5 +215,58 @@ describe('tasks', () => {
     expect(Object.keys(archive)).toEqual(['archived_at'])
     expect(typeof archive.archived_at).toBe('string')
     expect(restore).toEqual({ archived_at: null })
+  })
+})
+
+describe('TV summary', () => {
+  const reply = {
+    generated_at: '2026-10-16T19:42:00+00:00',
+    tasks: [
+      { title: 'File accounts', context: 'StarScale', priority: 'high', due_on: '2026-10-20', due_at: null },
+      { title: 'Investor call', context: 'StarScale', priority: 'medium', due_on: null, due_at: '2026-10-21T09:00:00+00:00' },
+      { title: 'Someday', context: 'Personal', priority: 'low', due_on: null, due_at: null },
+    ],
+  }
+
+  it('calls the database summary function and reads both kinds of deadline', async () => {
+    const { services, calls } = recordingClient([{ data: reply }])
+    const summary = await services.summary.get()
+    expect(calls.map((call) => call.table)).toEqual(['rpc:tv_summary'])
+    expect(summary).toEqual({
+      generatedAt: '2026-10-16T19:42:00+00:00',
+      tasks: [
+        { title: 'File accounts', context: 'StarScale', priority: 'high', deadline: { kind: 'date', date: '2026-10-20' } },
+        { title: 'Investor call', context: 'StarScale', priority: 'medium', deadline: { kind: 'time', at: '2026-10-21T09:00:00+00:00' } },
+        { title: 'Someday', context: 'Personal', priority: 'low', deadline: null },
+      ],
+    })
+  })
+
+  it('keeps the order the database chose', async () => {
+    const { services } = recordingClient([{ data: { ...reply, tasks: [...reply.tasks].reverse() } }])
+    expect((await services.summary.get()).tasks.map((task) => task.title)).toEqual(['Someday', 'Investor call', 'File accounts'])
+  })
+
+  it('accepts an empty summary', async () => {
+    const { services } = recordingClient([{ data: { generated_at: reply.generated_at, tasks: [] } }])
+    expect((await services.summary.get()).tasks).toEqual([])
+  })
+
+  it('carries only the four TV fields, whatever else a reply contains', async () => {
+    const extra = { ...reply.tasks[0], notes: 'private', id: 't1' }
+    const { services } = recordingClient([{ data: { ...reply, tasks: [extra] } }])
+    expect(Object.keys((await services.summary.get()).tasks[0]).sort()).toEqual(['context', 'deadline', 'priority', 'title'])
+  })
+
+  it('refuses a reply in an unexpected form instead of guessing', async () => {
+    const broken = { ...reply, tasks: [{ title: 'No context', priority: 'high' }] }
+    const { services } = recordingClient([{ data: broken }, { data: null }])
+    await expect(services.summary.get()).rejects.toThrow('unexpected form')
+    await expect(services.summary.get()).rejects.toThrow('unexpected form')
+  })
+
+  it('reports a refusal plainly', async () => {
+    const { services } = recordingClient([{ error: { code: '42501', message: 'tv_summary: caller is not allowed' } }])
+    await expect(services.summary.get()).rejects.toThrow('Nexus refused to load the summary')
   })
 })

@@ -112,10 +112,29 @@ plain English, define technical terms, and go one step at a time.
   moment), never both; the constraint `tasks_one_kind_of_deadline` enforces it
   (migration `20261015090000_task_due_on.sql`). The data layer always sends
   both columns together. Helpers in `src/lib/deadlines.ts`; tests run in
-  London time (`vite.config.ts`). `tv_summary()` still returns only `due_at`;
-  changing it belongs to 2c-3.
+  London time (`vite.config.ts`).
 - Applying a new migration to the PC's existing local database: `npx supabase
   migration up --local`. Never `supabase db reset` unless the owner wants the data gone.
+
+## Live dashboards (Phase 2c-3)
+
+- Plan approved 14 October 2026, built in three checkpoints: 2c-3a TV summary
+  migration, checks and `summary.get()`; 2c-3b live Mission Control; 2c-3c
+  live TV. Each stops for PC verification.
+- `tv_summary()` (latest definition in
+  `20261016090000_tv_summary_due_on.sql`) returns per task exactly: title,
+  context, priority, due_on, due_at. Ordered by deadline day in London time,
+  then priority, then time, then age; at most 50. All TV filtering happens in
+  PostgreSQL; the app never filters or trims what the TV may see. The fake in
+  `src/test/fakeData.ts` only imitates it for screen tests.
+- Approved decisions: Mission Control's Today card has working completion
+  checkboxes; a per-context progress card stands in for Projects until
+  Projects is built; progress figures must be exact counts with a stated
+  definition, never estimates; greetings stay generic (no stored name).
+- TV exception, approved: one discreet, keyboard-accessible settings menu with
+  Refresh now and Sign out (confirmed before signing out). Otherwise the TV
+  stays control-free, minimal and readable across a room, and shows clearly
+  when its information is stale or offline.
 
 ## Before each commit
 
@@ -175,7 +194,8 @@ plain English, define technical terms, and go one step at a time.
   authenticator code, and the access rules require that code for reading as
   well as writing. A separate read-only TV login can only call one redacted
   summary function. An automated access report runs on every change.
-- TV: the `/tv` route of the same app. No interactive controls, tinted panels
+- TV: the `/tv` route of the same app. No interactive controls (except the
+  approved settings menu, see Live dashboards), tinted panels
   instead of live blur, and (once data exists) a data-age indicator plus
   offline and signed-out states. The TV is treated as public: titles only.
 - AI: none in the MVP. A built-in assistant is the first feature after the
@@ -223,9 +243,11 @@ implement any of these until the owner asks.
   manager): verified on the PC 14 October 2026 (58 of 58 real checks).
 - 2c-2b Task editor (title, notes, priority, date-only and timed deadlines,
   context, hide from TV, archive and restore, Open / Completed / Archived),
-  plus the `due_on` migration: built on the Mac 14 October 2026; awaiting PC
-  verification (65 real checks expected).
-  Next: 2c-3 live Mission Control and TV data. Needs its own go-ahead.
+  plus the `due_on` migration: verified on the PC (65 of 65 real checks).
+- 2c-3a TV summary with date-only deadlines, its checks and `summary.get()`:
+  built on the Mac 14 October 2026; awaiting PC verification (68 real checks
+  expected). Next: 2c-3b live Mission Control, then 2c-3c live TV. Each needs
+  its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

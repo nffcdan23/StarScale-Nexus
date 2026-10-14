@@ -195,6 +195,46 @@ describe('data layer against real Supabase (owner with an authenticator code)', 
   })
 })
 
+describe('TV summary against real Supabase (Phase 2c-3a)', () => {
+  const secret = 'SECRET-INTEGRATION-NOTE'
+
+  it('shows the TV only what the database allows, in deadline order, with no notes', async () => {
+    // Shown on the TV.
+    const onTv = await ownerData.contexts.create('On TV')
+    await ownerData.contexts.setShowOnTv(onTv.id, true)
+    const dated = await ownerData.tasks.create({ contextId: onTv.id, title: 'TV date task' })
+    await ownerData.tasks.update(dated.id, { notes: secret, priority: 'low', deadline: { kind: 'date', date: '2030-03-15' } })
+    const timed = await ownerData.tasks.create({ contextId: onTv.id, title: 'TV timed task' })
+    await ownerData.tasks.update(timed.id, { priority: 'high', deadline: { kind: 'time', at: '2030-03-15T08:00:00.000Z' } })
+    await ownerData.tasks.create({ contextId: onTv.id, title: 'TV no deadline' })
+
+    // Left out by the database.
+    const hidden = await ownerData.tasks.create({ contextId: onTv.id, title: 'TV hidden' })
+    await ownerData.tasks.update(hidden.id, { hideFromTv: true })
+    const done = await ownerData.tasks.create({ contextId: onTv.id, title: 'TV done' })
+    await ownerData.tasks.setDone(done.id, true)
+    const archived = await ownerData.tasks.create({ contextId: onTv.id, title: 'TV archived' })
+    await ownerData.tasks.setArchived(archived.id, true)
+    const offTv = await ownerData.contexts.create('Not on TV')
+    await ownerData.tasks.create({ contextId: offTv.id, title: 'TV private context' })
+    const oldContext = await ownerData.contexts.create('Archived on TV')
+    await ownerData.contexts.setShowOnTv(oldContext.id, true)
+    await ownerData.tasks.create({ contextId: oldContext.id, title: 'TV archived context' })
+    await ownerData.contexts.setArchived(oldContext.id, true)
+
+    const summary = await tvData.summary.get()
+    expect(typeof summary.generatedAt).toBe('string')
+    expect(summary.tasks.map((task) => task.title)).toEqual(['TV timed task', 'TV date task', 'TV no deadline'])
+    expect(summary.tasks[0].deadline?.kind).toBe('time')
+    expect(summary.tasks[1]).toEqual({ title: 'TV date task', context: 'On TV', priority: 'low', deadline: { kind: 'date', date: '2030-03-15' } })
+    expect(summary.tasks[2].deadline).toBeNull()
+    expect(JSON.stringify(summary)).not.toContain(secret)
+
+    // The owner, with an authenticator code, gets exactly the same redacted summary.
+    expect((await ownerData.summary.get()).tasks).toEqual(summary.tasks)
+  })
+})
+
 describe('data layer against real Supabase (TV sign-in)', () => {
   it('sees none of the owner\'s contexts or tasks directly', async () => {
     expect(await tvData.contexts.list({ includeArchived: true })).toEqual([])

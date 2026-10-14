@@ -57,6 +57,24 @@ export interface TaskChanges {
   deadline?: Deadline
 }
 
+/**
+ * One task as the TV summary returns it: only these fields ever leave the
+ * database for the TV. The database decides which tasks are included.
+ */
+export interface TvTask {
+  title: string
+  context: string
+  priority: Priority
+  deadline: Deadline
+}
+
+export interface TvSummary {
+  /** When the database produced this summary. */
+  generatedAt: string
+  /** Earliest deadline day first (London time), then priority. At most 50. */
+  tasks: TvTask[]
+}
+
 /** Database limits, repeated here so forms can stop a value before sending it. */
 export const limits = {
   contextName: 60,
@@ -93,7 +111,13 @@ export interface TasksService {
   setArchived(id: string, archived: boolean): Promise<Task>
 }
 
+/** The redacted summary the TV shows. The owner, with an authenticator code, may call it too. */
+export interface SummaryService {
+  get(): Promise<TvSummary>
+}
+
 export interface DataServices {
   contexts: ContextsService
   tasks: TasksService
+  summary: SummaryService
 }

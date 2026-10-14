@@ -23,7 +23,7 @@ function summaryIsRedacted(rows) {
     return `expected only "Visible task", got ${JSON.stringify(titles)}`
   }
   const fields = Object.keys(summary.tasks[0]).sort().join(',')
-  if (fields !== 'context,due_at,priority,title') return `unexpected fields: ${fields}`
+  if (fields !== 'context,due_at,due_on,priority,title') return `unexpected fields: ${fields}`
   if (JSON.stringify(summary).includes(secretNote)) return 'the summary leaked a task note'
   return null
 }
@@ -276,6 +276,58 @@ export const cases = [
     title: 'Cannot set any deadline',
     sql: "update public.tasks set due_on = '2026-10-20'",
     expect: tableRefused('tasks'),
+  },
+
+  // The TV summary's filtering and order (migration 20261016090000_tv_summary_due_on, Phase 2c-3a).
+  {
+    id: 'TV-11',
+    identity: 'tv',
+    title: 'TV summary includes a date-only deadline',
+    setup: `update public.tasks set due_on = '2026-10-20' where id = '${ids.taskVisible}'`,
+    sql: callSummary,
+    expect: passes((rows) => {
+      const task = rows[0]?.summary?.tasks?.[0]
+      return task?.due_on === '2026-10-20' && task.due_at === null
+        ? null
+        : `expected due_on 2026-10-20 and no due_at, got ${JSON.stringify(task)}`
+    }),
+  },
+  {
+    id: 'TV-12',
+    identity: 'tv',
+    title: 'TV summary leaves out tasks in an archived context, even one shown on TV',
+    setup: `
+      insert into public.contexts (id, owner_id, name, slug, show_on_tv, archived_at) values
+        ('${ids.contextArchived}', '${ids.owner}', 'Old project', 'old-project', true, now());
+      insert into public.tasks (owner_id, context_id, title) values
+        ('${ids.owner}', '${ids.contextArchived}', 'Archived context task');`,
+    sql: callSummary,
+    expect: passes(summaryIsRedacted),
+  },
+  {
+    id: 'TV-13',
+    identity: 'tv',
+    title: 'TV summary lists by deadline day in London time, then priority',
+    setup: `
+      insert into public.tasks (owner_id, context_id, title, priority, due_on, due_at) values
+        ('${ids.owner}', '${ids.contextVisible}', 'Day two, high', 'high', null, '2026-10-21T09:00:00Z'),
+        ('${ids.owner}', '${ids.contextVisible}', 'Just after midnight in London', 'high', null, '2026-10-20T23:30:00Z'),
+        ('${ids.owner}', '${ids.contextVisible}', 'Day one, all day, low', 'low', '2026-10-20', null),
+        ('${ids.owner}', '${ids.contextVisible}', 'Day one, 9 AM, high', 'high', null, '2026-10-20T08:00:00Z');`,
+    sql: callSummary,
+    expect: passes((rows) => {
+      const titles = rows[0]?.summary?.tasks?.map((task) => task.title)
+      const expected = [
+        'Day one, 9 AM, high',
+        'Day one, all day, low',
+        'Just after midnight in London',
+        'Day two, high',
+        'Visible task',
+      ]
+      return JSON.stringify(titles) === JSON.stringify(expected)
+        ? null
+        : `expected ${JSON.stringify(expected)}, got ${JSON.stringify(titles)}`
+    }),
   },
 
   // A TV sign-in that enrols its own authenticator must gain nothing.

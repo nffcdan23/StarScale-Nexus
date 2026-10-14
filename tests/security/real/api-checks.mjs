@@ -199,6 +199,10 @@ export async function runApiChecks(config, db) {
         return `unexpected summary, ${describe(summary)} ${JSON.stringify(summary.data)}`
       }
       if (JSON.stringify(summary.data).includes(secretNote)) return 'the summary leaked a task note'
+      const fields = summary.data.tasks.map((task) => Object.keys(task).sort().join(','))
+      if (fields.some((entry) => entry !== 'context,due_at,due_on,priority,title')) {
+        return `the summary returned unexpected fields: ${JSON.stringify(fields)}`
+      }
       const read = await call(config, tasksPath, { token: tvToken })
       return read.status === 200 && Array.isArray(read.data) && read.data.length === 0
         ? null

@@ -1,9 +1,16 @@
 import { taskChangesToRow } from '../data/supabaseData'
-import { DataError, type Context, type DataServices, type Task, type TaskView } from '../data/types'
+import { DataError, type Context, type DataServices, type Priority, type Task, type TaskView } from '../data/types'
+import { localDateString } from '../lib/deadlines'
 
 // An in-memory stand-in for the database, so the screens can be tested on a
 // machine with no Supabase. It copies only the behaviour the screens rely on.
 // It proves nothing about the real database or its security rules.
+
+const priorityRank: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
+
+/** A task's deadline day, for ordering the imitation summary. */
+const deadlineDay = (task: Task) =>
+  !task.deadline ? null : task.deadline.kind === 'date' ? task.deadline.date : localDateString(new Date(task.deadline.at))
 
 let clock = Date.parse('2026-10-14T09:00:00Z')
 const now = () => new Date((clock += 1000)).toISOString()
@@ -133,5 +140,35 @@ export class FakeData implements DataServices {
       task.updatedAt = now()
       return { ...task }
     },
+  }
+
+  /**
+   * An imitation of the database function tv_summary(), so TV screens can be
+   * tested here. The real filtering happens in PostgreSQL and is proved by
+   * the security checks, never by this.
+   */
+  summary: DataServices['summary'] = {
+    get: async () => ({
+      generatedAt: now(),
+      tasks: this.taskRows
+        .filter((task) => {
+          const context = this.contextRows.find((entry) => entry.id === task.contextId)
+          return task.status === 'open' && !task.archivedAt && !task.hideFromTv && context?.showOnTv && !context.archivedAt
+        })
+        .sort((a, b) => {
+          const [dayA, dayB] = [deadlineDay(a), deadlineDay(b)]
+          if (dayA !== dayB) return dayA === null ? 1 : dayB === null ? -1 : dayA.localeCompare(dayB)
+          const atA = a.deadline?.kind === 'time' ? a.deadline.at : ''
+          const atB = b.deadline?.kind === 'time' ? b.deadline.at : ''
+          return priorityRank[a.priority] - priorityRank[b.priority] || atA.localeCompare(atB) || a.createdAt.localeCompare(b.createdAt)
+        })
+        .slice(0, 50)
+        .map((task) => ({
+          title: task.title,
+          context: this.contextRows.find((entry) => entry.id === task.contextId)!.name,
+          priority: task.priority,
+          deadline: task.deadline,
+        })),
+    }),
   }
 }

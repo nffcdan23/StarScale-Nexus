@@ -55,6 +55,16 @@ export const mutations = [
     title: 'Rule allowing only one kind of deadline removed',
     apply: (sql) => sql.replace(/alter table public\.tasks\s+add constraint tasks_one_kind_of_deadline[^;]*;/, ''),
   },
+  {
+    id: 'SELFTEST-10',
+    title: 'TV summary no longer leaves out completed tasks',
+    apply: remove("and t.status = 'open'"),
+  },
+  {
+    id: 'SELFTEST-11',
+    title: 'TV summary no longer leaves out archived contexts',
+    apply: remove('and c.archived_at is null'),
+  },
 ]
 
 /** Applies one mutation to a copy of the migrations. Throws if it changed nothing. */
