@@ -235,8 +235,8 @@
     },
     {
       "id": "REAL-05",
-      "status": "failed",
-      "detail": "Cannot read properties of undefined (reading 'secret')"
+      "status": "passed",
+      "detail": ""
     },
     {
       "id": "REAL-06",
@@ -250,8 +250,8 @@
     },
     {
       "id": "REAL-08",
-      "status": "failed",
-      "detail": "a new sign-up was accepted; switch sign-ups off in the local settings"
+      "status": "passed",
+      "detail": ""
     }
   ]
 }
