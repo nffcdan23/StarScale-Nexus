@@ -16,9 +16,9 @@ counts as a security pass.
 | Level | Passed | Failed | Not executed or stale |
 | --- | --- | --- | --- |
 | Simulated (PGlite) | 42 | 0 | 0 |
-| Real Supabase | 0 | 0 | 50 |
+| Real Supabase | 48 | 2 | 0 |
 
-Real Supabase checks have never been run.
+Last real run: 2026-10-14 on win32, migrations fingerprint `8f951f644e4c`.
 
 ## Migrations and written rules
 
@@ -36,48 +36,48 @@ Real Supabase checks have never been run.
 
 | ID | Who | Check | Simulated (PGlite) | Real Supabase |
 | --- | --- | --- | --- | --- |
-| ANON-01 | Not signed in | Cannot read tasks | Passed | Not executed |
-| ANON-02 | Not signed in | Cannot read contexts | Passed | Not executed |
-| ANON-03 | Not signed in | Cannot add a task | Passed | Not executed |
-| ANON-04 | Not signed in | Cannot change tasks | Passed | Not executed |
-| ANON-05 | Not signed in | Cannot delete tasks | Passed | Not executed |
-| ANON-06 | Not signed in | Cannot run the TV summary | Passed | Not executed |
-| ANON-07 | Not signed in | Cannot read the identity register | Passed | Not executed |
-| ANON-08 | Not signed in | Cannot run private helper functions | Passed | Not executed |
-| TV-01 | TV sign-in | Sees no tasks directly | Passed | Not executed |
-| TV-02 | TV sign-in | Sees no contexts directly | Passed | Not executed |
-| TV-03 | TV sign-in | Cannot add a task | Passed | Not executed |
-| TV-04 | TV sign-in | Cannot add a context | Passed | Not executed |
-| TV-05 | TV sign-in | Cannot change any task | Passed | Not executed |
-| TV-06 | TV sign-in | Cannot delete tasks | Passed | Not executed |
-| TV-07 | TV sign-in | Cannot read the identity register | Passed | Not executed |
-| TV-08 | TV sign-in | TV summary shows only visible tasks, titles and dates only | Passed | Not executed |
-| NOCODE-01 | Owner, no authenticator code | Sees no tasks | Passed | Not executed |
-| NOCODE-02 | Owner, no authenticator code | Sees no contexts | Passed | Not executed |
-| NOCODE-03 | Owner, no authenticator code | Cannot add a task | Passed | Not executed |
-| NOCODE-04 | Owner, no authenticator code | Cannot change any task | Passed | Not executed |
-| NOCODE-05 | Owner, no authenticator code | Cannot run the TV summary | Passed | Not executed |
-| OWNER-01 | Owner, with authenticator code | Sees their own five tasks and nobody else's | Passed | Not executed |
-| OWNER-02 | Owner, with authenticator code | Sees their own two contexts | Passed | Not executed |
-| OWNER-03 | Owner, with authenticator code | Can add a task; the database records the owner and origin itself | Passed | Not executed |
-| OWNER-04 | Owner, with authenticator code | Can change their own task | Passed | Not executed |
-| OWNER-05 | Owner, with authenticator code | Marking a task done records when it was completed | Passed | Not executed |
-| OWNER-06 | Owner, with authenticator code | Cannot delete tasks (archive only) | Passed | Not executed |
-| OWNER-07 | Owner, with authenticator code | Cannot choose a task's owner | Passed | Not executed |
-| OWNER-08 | Owner, with authenticator code | Cannot choose a task's origin | Passed | Not executed |
-| OWNER-09 | Owner, with authenticator code | Cannot hand a task to another owner | Passed | Not executed |
-| OWNER-10 | Owner, with authenticator code | Cannot file a task under another owner's context | Passed | Not executed |
-| OWNER-11 | Owner, with authenticator code | Cannot change another owner's task | Passed | Not executed |
-| OWNER-12 | Owner, with authenticator code | A blank task title is rejected | Passed | Not executed |
-| OWNER-13 | Owner, with authenticator code | Cannot read the identity register | Passed | Not executed |
-| OWNER-14 | Owner, with authenticator code | Can run the summary, with the same redaction as the TV | Passed | Not executed |
-| TVCODE-01 | TV sign-in that enrolled its own authenticator | Still sees no tasks directly | Passed | Not executed |
-| TVCODE-02 | TV sign-in that enrolled its own authenticator | Still cannot add a task | Passed | Not executed |
-| TVCODE-03 | TV sign-in that enrolled its own authenticator | Still cannot add a context | Passed | Not executed |
-| TVCODE-04 | TV sign-in that enrolled its own authenticator | Still gets only the redacted summary | Passed | Not executed |
-| STRANGER-01 | Unregistered sign-in, with authenticator code | Sees no tasks | Passed | Not executed |
-| STRANGER-02 | Unregistered sign-in, with authenticator code | Cannot add a context | Passed | Not executed |
-| STRANGER-03 | Unregistered sign-in, with authenticator code | Cannot run the TV summary | Passed | Not executed |
+| ANON-01 | Not signed in | Cannot read tasks | Passed | Passed |
+| ANON-02 | Not signed in | Cannot read contexts | Passed | Passed |
+| ANON-03 | Not signed in | Cannot add a task | Passed | Passed |
+| ANON-04 | Not signed in | Cannot change tasks | Passed | Passed |
+| ANON-05 | Not signed in | Cannot delete tasks | Passed | Passed |
+| ANON-06 | Not signed in | Cannot run the TV summary | Passed | Passed |
+| ANON-07 | Not signed in | Cannot read the identity register | Passed | Passed |
+| ANON-08 | Not signed in | Cannot run private helper functions | Passed | Passed |
+| TV-01 | TV sign-in | Sees no tasks directly | Passed | Passed |
+| TV-02 | TV sign-in | Sees no contexts directly | Passed | Passed |
+| TV-03 | TV sign-in | Cannot add a task | Passed | Passed |
+| TV-04 | TV sign-in | Cannot add a context | Passed | Passed |
+| TV-05 | TV sign-in | Cannot change any task | Passed | Passed |
+| TV-06 | TV sign-in | Cannot delete tasks | Passed | Passed |
+| TV-07 | TV sign-in | Cannot read the identity register | Passed | Passed |
+| TV-08 | TV sign-in | TV summary shows only visible tasks, titles and dates only | Passed | Passed |
+| NOCODE-01 | Owner, no authenticator code | Sees no tasks | Passed | Passed |
+| NOCODE-02 | Owner, no authenticator code | Sees no contexts | Passed | Passed |
+| NOCODE-03 | Owner, no authenticator code | Cannot add a task | Passed | Passed |
+| NOCODE-04 | Owner, no authenticator code | Cannot change any task | Passed | Passed |
+| NOCODE-05 | Owner, no authenticator code | Cannot run the TV summary | Passed | Passed |
+| OWNER-01 | Owner, with authenticator code | Sees their own five tasks and nobody else's | Passed | Passed |
+| OWNER-02 | Owner, with authenticator code | Sees their own two contexts | Passed | Passed |
+| OWNER-03 | Owner, with authenticator code | Can add a task; the database records the owner and origin itself | Passed | Passed |
+| OWNER-04 | Owner, with authenticator code | Can change their own task | Passed | Passed |
+| OWNER-05 | Owner, with authenticator code | Marking a task done records when it was completed | Passed | Passed |
+| OWNER-06 | Owner, with authenticator code | Cannot delete tasks (archive only) | Passed | Passed |
+| OWNER-07 | Owner, with authenticator code | Cannot choose a task's owner | Passed | Passed |
+| OWNER-08 | Owner, with authenticator code | Cannot choose a task's origin | Passed | Passed |
+| OWNER-09 | Owner, with authenticator code | Cannot hand a task to another owner | Passed | Passed |
+| OWNER-10 | Owner, with authenticator code | Cannot file a task under another owner's context | Passed | Passed |
+| OWNER-11 | Owner, with authenticator code | Cannot change another owner's task | Passed | Passed |
+| OWNER-12 | Owner, with authenticator code | A blank task title is rejected | Passed | Passed |
+| OWNER-13 | Owner, with authenticator code | Cannot read the identity register | Passed | Passed |
+| OWNER-14 | Owner, with authenticator code | Can run the summary, with the same redaction as the TV | Passed | Passed |
+| TVCODE-01 | TV sign-in that enrolled its own authenticator | Still sees no tasks directly | Passed | Passed |
+| TVCODE-02 | TV sign-in that enrolled its own authenticator | Still cannot add a task | Passed | Passed |
+| TVCODE-03 | TV sign-in that enrolled its own authenticator | Still cannot add a context | Passed | Passed |
+| TVCODE-04 | TV sign-in that enrolled its own authenticator | Still gets only the redacted summary | Passed | Passed |
+| STRANGER-01 | Unregistered sign-in, with authenticator code | Sees no tasks | Passed | Passed |
+| STRANGER-02 | Unregistered sign-in, with authenticator code | Cannot add a context | Passed | Passed |
+| STRANGER-03 | Unregistered sign-in, with authenticator code | Cannot run the TV summary | Passed | Passed |
 
 ## Checks that need real Supabase
 
@@ -85,14 +85,14 @@ These exercise Supabase's own sign-in service and Data API, which are not imitat
 
 | ID | Check | Simulated (PGlite) | Real Supabase |
 | --- | --- | --- | --- |
-| REAL-01 | The migrations apply cleanly to a real Supabase database | Not possible | Not executed |
-| REAL-02 | A visitor with only the public key reads nothing through the Data API | Not possible | Not executed |
-| REAL-03 | A visitor with only the public key cannot run the TV summary | Not possible | Not executed |
-| REAL-04 | Password sign-in alone gives the owner no data | Not possible | Not executed |
-| REAL-05 | After a real authenticator code, the owner can read and add tasks | Not possible | Not executed |
-| REAL-06 | A real TV sign-in gets the redacted summary and no table access | Not possible | Not executed |
-| REAL-07 | A real TV sign-in cannot write through the Data API | Not possible | Not executed |
-| REAL-08 | New sign-ups are refused | Not possible | Not executed |
+| REAL-01 | The migrations apply cleanly to a real Supabase database | Not possible | Passed |
+| REAL-02 | A visitor with only the public key reads nothing through the Data API | Not possible | Passed |
+| REAL-03 | A visitor with only the public key cannot run the TV summary | Not possible | Passed |
+| REAL-04 | Password sign-in alone gives the owner no data | Not possible | Passed |
+| REAL-05 | After a real authenticator code, the owner can read and add tasks | Not possible | FAILED |
+| REAL-06 | A real TV sign-in gets the redacted summary and no table access | Not possible | Passed |
+| REAL-07 | A real TV sign-in cannot write through the Data API | Not possible | Passed |
+| REAL-08 | New sign-ups are refused | Not possible | FAILED |
 
 ## Self-test: do the checks notice a removed protection?
 

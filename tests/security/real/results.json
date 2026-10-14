@@ -1,0 +1,257 @@
+{
+  "fingerprint": "8f951f644e4c",
+  "ranOn": "2026-10-14",
+  "system": "win32",
+  "results": [
+    {
+      "id": "REAL-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-11",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-12",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-13",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-14",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-05",
+      "status": "failed",
+      "detail": "Cannot read properties of undefined (reading 'secret')"
+    },
+    {
+      "id": "REAL-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-08",
+      "status": "failed",
+      "detail": "a new sign-up was accepted; switch sign-ups off in the local settings"
+    }
+  ]
+}
