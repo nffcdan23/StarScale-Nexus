@@ -3,10 +3,14 @@ import { useData } from '../../app/data/dataContext'
 import form from '../../components/Form/Form.module.css'
 import { GlassPanel } from '../../components/GlassPanel/GlassPanel'
 import { PriorityBadge } from '../../components/PriorityBadge/PriorityBadge'
-import { limits, type Context, type Priority, type Task } from '../../data/types'
+import { limits, type Context, type Priority, type Task, type TaskView } from '../../data/types'
+import { cx } from '../../lib/cx'
+import { deadlineState, formatDeadline } from '../../lib/deadlines'
 import { formatDayMonth } from '../../lib/time'
 import { useAction } from '../../lib/useAction'
+import { useMinuteClock } from '../../lib/useMinuteClock'
 import { useLoad } from '../../lib/useLoad'
+import { TaskEditor } from './TaskEditor'
 import styles from './TasksPanel.module.css'
 
 const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
@@ -18,12 +22,25 @@ function sortOpen(tasks: Task[]) {
   )
 }
 
-/** Quick add, the open task list, and recently completed tasks. */
+const views: Array<{ view: TaskView; label: string; empty: string }> = [
+  { view: 'open', label: 'Open', empty: 'Nothing open. Add a task above.' },
+  { view: 'done', label: 'Completed', empty: 'No completed tasks yet.' },
+  { view: 'archived', label: 'Archived', empty: 'No archived tasks.' },
+]
+
+/** Quick add, and one list of tasks: open, completed or archived. */
 export function TasksPanel({ contexts }: { contexts: Context[] }) {
   const { tasks } = useData()
-  const open = useLoad(useCallback(() => tasks.list('open'), [tasks]))
-  const done = useLoad(useCallback(() => tasks.list('done'), [tasks]))
+  const [view, setView] = useState<TaskView>('open')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  // Each result remembers which list it belongs to, so switching lists never
+  // shows the previous list's tasks under the new heading.
+  const list = useLoad(useCallback(() => tasks.list(view).then((items) => ({ view, items })), [tasks, view]))
   const { busy, error, run } = useAction()
+  const now = useMinuteClock()
+
+  const shown = list.data?.view === view ? list.data.items : undefined
+  const current = views.find((entry) => entry.view === view)!
 
   const contextName = (id: string) => {
     const context = contexts.find((entry) => entry.id === id)
@@ -31,63 +48,89 @@ export function TasksPanel({ contexts }: { contexts: Context[] }) {
     return context.archivedAt ? `${context.name} (archived)` : context.name
   }
 
-  const reloadAll = () => {
-    open.reload()
-    done.reload()
+  const choose = (next: TaskView) => {
+    setView(next)
+    setEditingId(null)
   }
 
-  const toggle = (task: Task) => run(() => tasks.setDone(task.id, task.status === 'open')).then((ok) => ok && reloadAll())
+  const act = (work: () => Promise<unknown>) => run(work).then((ok) => ok && list.reload())
+
+  const closeEditor = (changed: boolean) => {
+    setEditingId(null)
+    if (changed) list.reload()
+  }
+
+  const added = () => {
+    if (view === 'open') list.reload()
+    else choose('open')
+  }
 
   const activeContexts = contexts.filter((context) => !context.archivedAt)
-  const loadError = open.error ?? done.error
+  const rows = shown && view === 'open' ? sortOpen(shown) : shown
 
   return (
     <div className={styles.column}>
-      <QuickAdd contexts={activeContexts} onAdded={open.reload} />
+      <QuickAdd contexts={activeContexts} onAdded={added} />
 
       {error && (
         <p className={form.error} role="alert">
           {error}
         </p>
       )}
-      {loadError && (
+      {list.error && (
         <p className={form.error} role="alert">
-          {loadError}{' '}
-          <button className={styles.inlineButton} type="button" onClick={reloadAll}>
+          {list.error}{' '}
+          <button className={styles.inlineButton} type="button" onClick={list.reload}>
             Try again
           </button>
         </p>
       )}
 
-      <GlassPanel as="section" padding="md" aria-label="Open tasks">
-        <h2 className={styles.heading}>
-          Open <span className={styles.count}>{open.data?.length ?? ''}</span>
-        </h2>
-        {open.loading && !open.data ? (
-          <p className={styles.muted}>Loading tasks…</p>
-        ) : open.data && open.data.length > 0 ? (
-          <ul className={styles.list}>
-            {sortOpen(open.data).map((task) => (
-              <TaskRow key={task.id} task={task} context={contextName(task.contextId)} busy={busy} onToggle={toggle} />
+      <GlassPanel as="section" padding="md" aria-label={`${current.label} tasks`}>
+        <div className={styles.listHeader}>
+          <h2 className={styles.heading}>
+            {current.label} <span className={styles.count}>{shown?.length ?? ''}</span>
+          </h2>
+          <div className={styles.filters} role="group" aria-label="Show tasks">
+            {views.map((entry) => (
+              <button
+                key={entry.view}
+                type="button"
+                className={cx(styles.filter, entry.view === view && styles.filterActive)}
+                aria-pressed={entry.view === view}
+                onClick={() => choose(entry.view)}
+              >
+                {entry.label}
+              </button>
             ))}
+          </div>
+        </div>
+
+        {!rows ? (
+          !list.error && <p className={styles.muted}>Loading tasks…</p>
+        ) : rows.length > 0 ? (
+          <ul className={styles.list}>
+            {rows.map((task) =>
+              editingId === task.id ? (
+                <TaskEditor key={task.id} task={task} contexts={contexts} onClose={closeEditor} />
+              ) : (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  context={contextName(task.contextId)}
+                  now={now}
+                  busy={busy}
+                  onToggle={() => act(() => tasks.setDone(task.id, task.status === 'open'))}
+                  onEdit={() => setEditingId(task.id)}
+                  onRestore={() => act(() => tasks.setArchived(task.id, false))}
+                />
+              ),
+            )}
           </ul>
         ) : (
-          <p className={styles.muted}>Nothing open. Add a task above.</p>
+          <p className={styles.muted}>{current.empty}</p>
         )}
       </GlassPanel>
-
-      {done.data && done.data.length > 0 && (
-        <GlassPanel as="section" padding="md" aria-label="Completed tasks">
-          <h2 className={styles.heading}>
-            Completed <span className={styles.count}>{done.data.length}</span>
-          </h2>
-          <ul className={styles.list}>
-            {done.data.map((task) => (
-              <TaskRow key={task.id} task={task} context={contextName(task.contextId)} busy={busy} onToggle={toggle} />
-            ))}
-          </ul>
-        </GlassPanel>
-      )}
     </div>
   )
 }
@@ -150,30 +193,67 @@ function QuickAdd({ contexts, onAdded }: { contexts: Context[]; onAdded: () => v
 interface TaskRowProps {
   task: Task
   context: string
+  now: Date
   busy: boolean
-  onToggle: (task: Task) => void
+  onToggle: () => void
+  onEdit: () => void
+  onRestore: () => void
 }
 
-function TaskRow({ task, context, busy, onToggle }: TaskRowProps) {
+function TaskRow({ task, context, now, busy, onToggle, onEdit, onRestore }: TaskRowProps) {
   const done = task.status === 'done'
+  const archived = Boolean(task.archivedAt)
+  const state = deadlineState(task.deadline, now)
+  const overdue = state === 'overdue' && !done && !archived
+  const firstLine = task.notes?.split('\n').find((line) => line.trim())
+
   return (
     <li className={styles.row}>
-      <input
-        type="checkbox"
-        className={styles.check}
-        checked={done}
-        disabled={busy}
-        onChange={() => onToggle(task)}
-        aria-label={done ? `Reopen “${task.title}”` : `Complete “${task.title}”`}
-      />
+      {!archived && (
+        <input
+          type="checkbox"
+          className={styles.check}
+          checked={done}
+          disabled={busy}
+          onChange={onToggle}
+          aria-label={done ? `Reopen “${task.title}”` : `Complete “${task.title}”`}
+        />
+      )}
       <div className={styles.text}>
         <span className={done ? styles.doneTitle : styles.title}>{task.title}</span>
+        {firstLine && <span className={styles.notes}>{firstLine}</span>}
         <span className={styles.meta}>
           {context}
+          {task.deadline && (
+            <>
+              {' · '}
+              <span className={cx(overdue && styles.overdue, state === 'today' && !done && !archived && styles.dueToday)}>
+                {overdue ? 'Overdue · ' : 'Due '}
+                {formatDeadline(task.deadline, now)}
+              </span>
+            </>
+          )}
           {done && task.completedAt ? ` · Completed ${formatDayMonth(new Date(task.completedAt))}` : ''}
+          {archived && task.archivedAt ? ` · Archived ${formatDayMonth(new Date(task.archivedAt))}` : ''}
+          {task.hideFromTv ? ' · Hidden from TV' : ''}
         </span>
       </div>
-      {!done && <PriorityBadge priority={task.priority} />}
+      {!done && !archived && <PriorityBadge priority={task.priority} />}
+      {archived ? (
+        <button
+          className={styles.textButton}
+          type="button"
+          disabled={busy}
+          onClick={onRestore}
+          aria-label={`Restore “${task.title}”`}
+        >
+          Restore
+        </button>
+      ) : (
+        <button className={styles.textButton} type="button" onClick={onEdit} aria-label={`Edit “${task.title}”`}>
+          Edit
+        </button>
+      )}
     </li>
   )
 }

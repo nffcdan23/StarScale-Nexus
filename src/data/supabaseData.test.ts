@@ -16,7 +16,7 @@ function recordingClient(replies: Reply[]) {
       const call = { table, steps: [] as Array<[string, unknown[]]> }
       calls.push(call)
       const builder: Record<string, unknown> = {}
-      for (const method of ['select', 'insert', 'update', 'eq', 'is', 'order', 'limit', 'single']) {
+      for (const method of ['select', 'insert', 'update', 'eq', 'is', 'not', 'order', 'limit', 'single']) {
         builder[method] = (...args: unknown[]) => {
           call.steps.push([method, args])
           return builder
@@ -107,6 +107,8 @@ describe('tasks', () => {
     status: 'done',
     priority: 'medium',
     hide_from_tv: false,
+    due_on: null,
+    due_at: null,
     completed_at: '2026-10-14T10:00:00Z',
     created_at: 'a',
     updated_at: 'b',
@@ -134,10 +136,75 @@ describe('tasks', () => {
     await expect(services.tasks.setDone('t1', false)).rejects.toThrow('Nexus refused to reopen the task')
   })
 
-  it('never lists archived tasks', async () => {
-    const { services, calls } = recordingClient([{ data: [] }])
+  it('keeps archived tasks out of the open and completed lists', async () => {
+    const { services, calls } = recordingClient([{ data: [] }, { data: [] }])
     await services.tasks.list('open')
+    await services.tasks.list('done')
     expect(calls[0].steps).toContainEqual(['is', ['archived_at', null]])
     expect(calls[0].steps).toContainEqual(['eq', ['status', 'open']])
+    expect(calls[1].steps).toContainEqual(['is', ['archived_at', null]])
+    expect(calls[1].steps).toContainEqual(['eq', ['status', 'done']])
+  })
+
+  it('lists archived tasks whatever their status, newest first', async () => {
+    const { services, calls } = recordingClient([{ data: [] }])
+    await services.tasks.list('archived')
+    expect(calls[0].steps).toContainEqual(['not', ['archived_at', 'is', null]])
+    expect(stepNames(calls[0].steps)).not.toContain('eq')
+    expect(calls[0].steps).toContainEqual(['order', ['archived_at', { ascending: false }]])
+  })
+
+  it('reads a date-only deadline and a timed deadline', async () => {
+    const { services } = recordingClient([
+      { data: [{ ...taskRow, due_on: '2026-10-17' }, { ...taskRow, id: 't2', due_at: '2026-10-17T08:00:00+00:00' }, { ...taskRow, id: 't3' }] },
+    ])
+    const [byDate, byTime, none] = await services.tasks.list('done')
+    expect(byDate.deadline).toEqual({ kind: 'date', date: '2026-10-17' })
+    expect(byTime.deadline).toEqual({ kind: 'time', at: '2026-10-17T08:00:00+00:00' })
+    expect(none.deadline).toBeNull()
+  })
+
+  it('always sends both deadline columns, so only one can ever be set', async () => {
+    const { services, calls } = recordingClient([{ data: taskRow }, { data: taskRow }, { data: taskRow }])
+    await services.tasks.update('t1', { deadline: { kind: 'date', date: '2026-10-17' } })
+    await services.tasks.update('t1', { deadline: { kind: 'time', at: '2026-10-17T08:00:00.000Z' } })
+    await services.tasks.update('t1', { deadline: null })
+    const updates = calls.map((call) => call.steps.find(([name]) => name === 'update')![1][0])
+    expect(updates).toEqual([
+      { due_on: '2026-10-17', due_at: null },
+      { due_on: null, due_at: '2026-10-17T08:00:00.000Z' },
+      { due_on: null, due_at: null },
+    ])
+  })
+
+  it('saves edits as database columns, tidying text first', async () => {
+    const { services, calls } = recordingClient([{ data: taskRow }])
+    await services.tasks.update('t1', {
+      title: ' Renew car insurance ',
+      notes: '   ',
+      priority: 'high',
+      contextId: 'c2',
+      hideFromTv: true,
+    })
+    const update = calls[0].steps.find(([name]) => name === 'update')![1][0]
+    expect(update).toEqual({ title: 'Renew car insurance', notes: null, priority: 'high', context_id: 'c2', hide_from_tv: true })
+    expect(calls[0].steps).toContainEqual(['eq', ['id', 't1']])
+  })
+
+  it('refuses a blank title or overlong notes before asking the database', async () => {
+    const { services, calls } = recordingClient([])
+    await expect(services.tasks.update('t1', { title: '  ' })).rejects.toThrow('Give the task a name.')
+    await expect(services.tasks.update('t1', { notes: 'x'.repeat(10001) })).rejects.toThrow('Keep the notes to 10000 characters.')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('archives by setting the archive time and restores by clearing it', async () => {
+    const { services, calls } = recordingClient([{ data: taskRow }, { data: taskRow }])
+    await services.tasks.setArchived('t1', true)
+    await services.tasks.setArchived('t1', false)
+    const [archive, restore] = calls.map((call) => call.steps.find(([name]) => name === 'update')![1][0] as Record<string, unknown>)
+    expect(Object.keys(archive)).toEqual(['archived_at'])
+    expect(typeof archive.archived_at).toBe('string')
+    expect(restore).toEqual({ archived_at: null })
   })
 })

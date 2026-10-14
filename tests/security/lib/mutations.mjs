@@ -50,6 +50,11 @@ export const mutations = [
     title: 'A TV sign-in is treated as an owner',
     apply: remove("and i.kind = 'owner'"),
   },
+  {
+    id: 'SELFTEST-09',
+    title: 'Rule allowing only one kind of deadline removed',
+    apply: (sql) => sql.replace(/alter table public\.tasks\s+add constraint tasks_one_kind_of_deadline[^;]*;/, ''),
+  },
 ]
 
 /** Applies one mutation to a copy of the migrations. Throws if it changed nothing. */

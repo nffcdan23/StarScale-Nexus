@@ -1,4 +1,5 @@
-import { DataError, type Context, type DataServices, type Task, type TaskStatus } from '../data/types'
+import { taskChangesToRow } from '../data/supabaseData'
+import { DataError, type Context, type DataServices, type Task, type TaskView } from '../data/types'
 
 // An in-memory stand-in for the database, so the screens can be tested on a
 // machine with no Supabase. It copies only the behaviour the screens rely on.
@@ -17,6 +18,12 @@ export class FakeData implements DataServices {
     const failure = this.failNextWrite
     this.failNextWrite = null
     if (failure) throw failure
+  }
+
+  private findTask(id: string) {
+    const task = this.taskRows.find((entry) => entry.id === id)
+    if (!task) throw new DataError('missing', 'Could not change the task: it no longer exists.')
+    return task
   }
 
   private findContext(id: string) {
@@ -41,6 +48,7 @@ export class FakeData implements DataServices {
       status: 'open',
       priority: 'medium',
       hideFromTv: false,
+      deadline: null,
       completedAt: null,
       createdAt: stamp,
       updatedAt: stamp,
@@ -81,24 +89,47 @@ export class FakeData implements DataServices {
   }
 
   tasks: DataServices['tasks'] = {
-    list: async (status: TaskStatus) =>
+    list: async (view: TaskView) =>
       this.taskRows
-        .filter((task) => task.status === status && !task.archivedAt)
-        .sort((a, b) =>
-          status === 'done' ? (b.completedAt ?? '').localeCompare(a.completedAt ?? '') : a.createdAt.localeCompare(b.createdAt),
-        )
+        .filter((task) => (view === 'archived' ? task.archivedAt : task.status === view && !task.archivedAt))
+        .sort((a, b) => {
+          if (view === 'archived') return (b.archivedAt ?? '').localeCompare(a.archivedAt ?? '')
+          if (view === 'done') return (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
+          return a.createdAt.localeCompare(b.createdAt)
+        })
         .map((task) => ({ ...task })),
     create: async ({ contextId, title }) => {
       this.takeFailure()
       this.findContext(contextId)
       return { ...this.addTask(contextId, title.trim()) }
     },
+    update: async (id, changes) => {
+      // The same checks as the real data layer, before anything is changed.
+      taskChangesToRow(changes)
+      this.takeFailure()
+      const task = this.findTask(id)
+      if (changes.contextId !== undefined) this.findContext(changes.contextId)
+      if (changes.title !== undefined) task.title = changes.title.trim()
+      if (changes.notes !== undefined) task.notes = changes.notes?.trim() || null
+      if (changes.priority !== undefined) task.priority = changes.priority
+      if (changes.contextId !== undefined) task.contextId = changes.contextId
+      if (changes.hideFromTv !== undefined) task.hideFromTv = changes.hideFromTv
+      if (changes.deadline !== undefined) task.deadline = changes.deadline
+      task.updatedAt = now()
+      return { ...task }
+    },
     setDone: async (id, done) => {
       this.takeFailure()
-      const task = this.taskRows.find((entry) => entry.id === id)
-      if (!task) throw new DataError('missing', 'Could not change the task: it no longer exists.')
+      const task = this.findTask(id)
       task.status = done ? 'done' : 'open'
       task.completedAt = done ? now() : null
+      task.updatedAt = now()
+      return { ...task }
+    },
+    setArchived: async (id, archived) => {
+      this.takeFailure()
+      const task = this.findTask(id)
+      task.archivedAt = archived ? now() : null
       task.updatedAt = now()
       return { ...task }
     },

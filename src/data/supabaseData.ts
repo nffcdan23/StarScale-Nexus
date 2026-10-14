@@ -6,8 +6,10 @@ import {
   type ContextsService,
   type DataServices,
   type Task,
-  type TaskStatus,
+  type TaskChanges,
   type TasksService,
+  type TaskView,
+  limits,
 } from './types'
 
 // The only code that reads or writes contexts and tasks. Every request runs
@@ -16,7 +18,7 @@ import {
 
 const contextColumns = 'id, name, show_on_tv, archived_at, created_at'
 const taskColumns =
-  'id, context_id, title, notes, status, priority, hide_from_tv, completed_at, created_at, updated_at, archived_at'
+  'id, context_id, title, notes, status, priority, hide_from_tv, due_on, due_at, completed_at, created_at, updated_at, archived_at'
 
 interface ContextRow {
   id: string
@@ -34,6 +36,8 @@ interface TaskRow {
   status: Task['status']
   priority: Task['priority']
   hide_from_tv: boolean
+  due_on: string | null
+  due_at: string | null
   completed_at: string | null
   created_at: string
   updated_at: string
@@ -56,6 +60,7 @@ const toTask = (row: TaskRow): Task => ({
   status: row.status,
   priority: row.priority,
   hideFromTv: row.hide_from_tv,
+  deadline: row.due_on ? { kind: 'date', date: row.due_on } : row.due_at ? { kind: 'time', at: row.due_at } : null,
   completedAt: row.completed_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -110,7 +115,7 @@ function contextsService(client: SupabaseClient): ContextsService {
     },
 
     async create(rawName) {
-      const name = trimmed(rawName, 'context', 60)
+      const name = trimmed(rawName, 'context', limits.contextName)
       // The id is made here, so a retried request can never create a second copy.
       const id = crypto.randomUUID()
       for (let attempt = 1; attempt <= 20; attempt += 1) {
@@ -130,28 +135,60 @@ function contextsService(client: SupabaseClient): ContextsService {
       throw new DataError('invalid', 'Too many contexts have a similar name. Choose a different name.')
     },
 
-    rename: (id, rawName) => update(id, { name: trimmed(rawName, 'context', 60) }, 'rename the context'),
+    rename: (id, rawName) => update(id, { name: trimmed(rawName, 'context', limits.contextName) }, 'rename the context'),
     setShowOnTv: (id, showOnTv) => update(id, { show_on_tv: showOnTv }, 'change the TV setting'),
     setArchived: (id, archived) =>
       update(id, { archived_at: archived ? new Date().toISOString() : null }, archived ? 'archive the context' : 'restore the context'),
   }
 }
 
+/** Turns the owner's edits into database columns, checking them first. */
+export function taskChangesToRow(changes: TaskChanges): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (changes.title !== undefined) row.title = trimmed(changes.title, 'task', limits.taskTitle)
+  if (changes.notes !== undefined) {
+    const notes = changes.notes?.trim() ?? ''
+    if (notes.length > limits.taskNotes) throw new DataError('invalid', `Keep the notes to ${limits.taskNotes} characters.`)
+    row.notes = notes || null
+  }
+  if (changes.priority !== undefined) row.priority = changes.priority
+  if (changes.contextId !== undefined) row.context_id = changes.contextId
+  if (changes.hideFromTv !== undefined) row.hide_from_tv = changes.hideFromTv
+  if (changes.deadline !== undefined) {
+    // Both columns are always sent together, so switching between a date and a
+    // time happens in one step and never breaks the one-kind-of-deadline rule.
+    const deadline = changes.deadline
+    row.due_on = deadline?.kind === 'date' ? deadline.date : null
+    row.due_at = deadline?.kind === 'time' ? deadline.at : null
+  }
+  return row
+}
+
 function tasksService(client: SupabaseClient): TasksService {
+  const update = async (id: string, changes: Record<string, unknown>, action: string) => {
+    const { data, error } = await client.from('tasks').update(changes).eq('id', id).select(taskColumns).single()
+    if (error) throw toDataError(error, action)
+    return toTask(data as TaskRow)
+  }
+
   return {
-    async list(status: TaskStatus) {
-      let query = client.from('tasks').select(taskColumns).eq('status', status).is('archived_at', null)
-      query =
-        status === 'done'
-          ? query.order('completed_at', { ascending: false }).limit(50)
-          : query.order('created_at', { ascending: true })
+    async list(view: TaskView) {
+      let query = client.from('tasks').select(taskColumns)
+      if (view === 'archived') {
+        query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false }).limit(100)
+      } else if (view === 'done') {
+        query = query.eq('status', 'done').is('archived_at', null).order('completed_at', { ascending: false }).limit(50)
+      } else {
+        query = query.eq('status', 'open').is('archived_at', null).order('created_at', { ascending: true })
+      }
       const { data, error } = await query
       if (error) throw toDataError(error, 'load your tasks')
       return (data as TaskRow[]).map(toTask)
     },
 
     async create({ contextId, title: rawTitle }) {
-      const title = trimmed(rawTitle, 'task', 200)
+      const title = trimmed(rawTitle, 'task', limits.taskTitle)
+      // The id is made here, so a retried request can never create a second copy.
       const id = crypto.randomUUID()
       const { data, error } = await client
         .from('tasks')
@@ -166,17 +203,17 @@ function tasksService(client: SupabaseClient): TasksService {
       throw toDataError(error, 'add the task')
     },
 
-    async setDone(id, done) {
-      // The database records when a task was completed; the app never sets it.
-      const { data, error } = await client
-        .from('tasks')
-        .update({ status: done ? 'done' : 'open' })
-        .eq('id', id)
-        .select(taskColumns)
-        .single()
-      if (error) throw toDataError(error, done ? 'complete the task' : 'reopen the task')
-      return toTask(data as TaskRow)
+    async update(id, changes) {
+      const row = taskChangesToRow(changes)
+      if (Object.keys(row).length === 0) throw new DataError('invalid', 'There were no changes to save.')
+      return update(id, row, 'save the task')
     },
+
+    // The database records when a task was completed; the app never sets it.
+    setDone: (id, done) => update(id, { status: done ? 'done' : 'open' }, done ? 'complete the task' : 'reopen the task'),
+
+    setArchived: (id, archived) =>
+      update(id, { archived_at: archived ? new Date().toISOString() : null }, archived ? 'archive the task' : 'restore the task'),
   }
 }
 

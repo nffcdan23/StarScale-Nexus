@@ -44,11 +44,19 @@
   margin-top: var(--space-3);
 }
 
+.listHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
 .heading {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
   font-size: var(--text-xl);
   font-weight: var(--weight-medium);
 }
@@ -139,6 +147,169 @@
 .meta {
   color: var(--text-tertiary);
   font-size: var(--text-sm);
+}
+
+.notes {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overdue {
+  color: var(--color-danger);
+}
+
+.dueToday {
+  color: var(--color-warning);
+}
+
+/* Open / Completed / Archived, styled like the outlined pill buttons in the reference design */
+.filters {
+  display: flex;
+  gap: var(--space-1);
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.filter {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.filter:hover {
+  color: var(--text-primary);
+}
+
+.filterActive {
+  background: var(--color-accent-wash);
+  color: var(--text-primary);
+}
+
+.textButton {
+  flex: none;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.textButton:hover {
+  color: var(--text-primary);
+}
+
+.textButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The task editor opens in place of the task's row */
+.editor {
+  padding: var(--space-4);
+  border: 1px solid rgba(160, 196, 255, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.editorForm {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.editorRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.editorRow > div {
+  flex: 1;
+  min-width: 160px;
+}
+
+.editorRow .select {
+  max-width: none;
+  width: 100%;
+}
+
+.notesInput {
+  height: auto;
+  min-height: 96px;
+  padding: var(--space-3) var(--space-4);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.deadline {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.dateInput {
+  flex: none;
+  color-scheme: dark;
+}
+
+.dateInput:disabled {
+  opacity: 0.5;
+}
+
+.hint {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.editorForm > label {
+  justify-self: start;
+  font-size: var(--text-sm);
+}
+
+.editorActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.saveButton {
+  height: 40px;
+  padding: 0 var(--space-6);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-ink-950);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pushRight {
+  margin-left: auto;
 }
 
 .inlineButton {

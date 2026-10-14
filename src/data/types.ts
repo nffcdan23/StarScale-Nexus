@@ -1,12 +1,18 @@
 // The shapes the app works with. Written by hand to match
 // supabase/migrations; the integration tests on the Windows PC confirm that
 // the real database returns exactly these.
-//
-// Deadlines are not here yet: they wait for the approved due-date migration
-// and the task editor (Phase 2c-2b).
 
 export type Priority = 'low' | 'medium' | 'high'
 export type TaskStatus = 'open' | 'done'
+
+/** Which tasks a list shows: open, completed, or archived (whatever their status). */
+export type TaskView = 'open' | 'done' | 'archived'
+
+/**
+ * A deadline is either a calendar day with no time ("due on Friday") or an
+ * exact moment ("Friday at 09:00"), never both. The database enforces this.
+ */
+export type Deadline = { kind: 'date'; date: string } | { kind: 'time'; at: string } | null
 
 /**
  * An area of life (for example Personal or StarScale). Created and named by
@@ -29,6 +35,7 @@ export interface Task {
   status: TaskStatus
   priority: Priority
   hideFromTv: boolean
+  deadline: Deadline
   completedAt: string | null
   createdAt: string
   updatedAt: string
@@ -40,10 +47,21 @@ export interface NewTask {
   title: string
 }
 
+/** The details the owner can edit. Anything left out is unchanged. */
+export interface TaskChanges {
+  title?: string
+  notes?: string | null
+  priority?: Priority
+  contextId?: string
+  hideFromTv?: boolean
+  deadline?: Deadline
+}
+
 /** Database limits, repeated here so forms can stop a value before sending it. */
 export const limits = {
   contextName: 60,
   taskTitle: 200,
+  taskNotes: 10000,
 } as const
 
 /** A failure whose message is fit to show to the owner. */
@@ -67,10 +85,12 @@ export interface ContextsService {
 }
 
 export interface TasksService {
-  /** Tasks with the given status that are not archived. */
-  list(status: TaskStatus): Promise<Task[]>
+  /** Open or completed tasks that are not archived, or archived tasks. */
+  list(view: TaskView): Promise<Task[]>
   create(task: NewTask): Promise<Task>
+  update(id: string, changes: TaskChanges): Promise<Task>
   setDone(id: string, done: boolean): Promise<Task>
+  setArchived(id: string, archived: boolean): Promise<Task>
 }
 
 export interface DataServices {

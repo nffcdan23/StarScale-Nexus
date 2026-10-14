@@ -146,7 +146,7 @@ function ContextRow({ context, busy, onRename, onToggleTv, onArchive }: ContextR
   return (
     <li className={styles.row}>
       <span className={styles.name}>{context.name}</span>
-      <label className={styles.switch}>
+      <label className={form.switch}>
         <input
           type="checkbox"
           role="switch"
@@ -155,7 +155,7 @@ function ContextRow({ context, busy, onRename, onToggleTv, onArchive }: ContextR
           onChange={(event) => onToggleTv(event.target.checked)}
           aria-label={`Show ${context.name} on TV`}
         />
-        <span className={styles.switchLabel} aria-hidden="true">
+        <span className={form.switchLabel} aria-hidden="true">
           TV
         </span>
       </label>

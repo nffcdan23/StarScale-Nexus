@@ -75,13 +75,18 @@ export async function runReal({ suite, fingerprint, expectedIds }) {
   try {
     db = await connect(config.dbUrl)
 
+    // Every migration's main object must exist; add one line per new migration.
     const applied = await db.query(
-      "select to_regclass('public.tasks') is not null and to_regprocedure('public.tv_summary()') is not null as ok",
+      `select to_regclass('public.tasks') is not null
+          and to_regprocedure('public.tv_summary()') is not null
+          and exists (select 1 from information_schema.columns
+                      where table_schema = 'public' and table_name = 'tasks' and column_name = 'due_on')
+        as ok`,
     )
     results.push({
       id: 'REAL-01',
       status: applied.rows[0].ok ? 'passed' : 'failed',
-      detail: applied.rows[0].ok ? '' : 'the tasks table or tv_summary function is missing',
+      detail: applied.rows[0].ok ? '' : 'a migration is missing: check the tasks table, tasks.due_on and tv_summary',
     })
 
     // The same access checks as the simulated run, now against Supabase's own

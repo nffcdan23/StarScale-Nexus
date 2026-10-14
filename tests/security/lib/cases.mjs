@@ -225,6 +225,59 @@ export const cases = [
     expect: changesRows(0),
   },
 
+  // Deadlines (migration 20261015090000_task_due_on, Phase 2c-2b).
+  {
+    id: 'OWNER-21',
+    identity: 'ownerWithCode',
+    title: 'Can give a task a date-only deadline',
+    sql: `update public.tasks set due_on = '2026-10-20' where id = '${ids.taskVisible}' returning due_on, due_at`,
+    expect: passes((rows) =>
+      rows.length === 1 && String(rows[0].due_on).length > 0 && rows[0].due_at === null ? null : `got ${JSON.stringify(rows)}`,
+    ),
+  },
+  {
+    id: 'OWNER-22',
+    identity: 'ownerWithCode',
+    title: 'A task cannot have both a date-only and a timed deadline',
+    sql: `update public.tasks set due_on = '2026-10-20', due_at = now() where id = '${ids.taskVisible}'`,
+    expect: { errorCode: '23514' },
+  },
+  {
+    id: 'OWNER-23',
+    identity: 'ownerWithCode',
+    title: 'Can add a task with a date-only deadline',
+    sql: `insert into public.tasks (context_id, title, due_on) values ('${ids.contextVisible}', 'Dated', '2026-10-20') returning due_on`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'OWNER-24',
+    identity: 'ownerWithCode',
+    title: 'Can switch a deadline from a date to a time in one change',
+    sql: `update public.tasks set due_on = null, due_at = '2026-10-20T09:00:00Z' where id = '${ids.taskVisible}'`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'TV-10',
+    identity: 'tv',
+    title: 'Cannot set any deadline',
+    sql: "update public.tasks set due_on = '2026-10-20'",
+    expect: changesRows(0),
+  },
+  {
+    id: 'NOCODE-07',
+    identity: 'ownerNoCode',
+    title: 'Cannot set any deadline',
+    sql: "update public.tasks set due_on = '2026-10-20'",
+    expect: changesRows(0),
+  },
+  {
+    id: 'ANON-09',
+    identity: 'anonymous',
+    title: 'Cannot set any deadline',
+    sql: "update public.tasks set due_on = '2026-10-20'",
+    expect: tableRefused('tasks'),
+  },
+
   // A TV sign-in that enrols its own authenticator must gain nothing.
   { id: 'TVCODE-01', identity: 'tvWithCode', title: 'Still sees no tasks directly', sql: readTasks, expect: seesRows(0) },
   { id: 'TVCODE-02', identity: 'tvWithCode', title: 'Still cannot add a task', sql: addTask, expect: blockedByRules },

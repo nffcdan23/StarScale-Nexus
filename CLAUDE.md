@@ -95,21 +95,27 @@ plain English, define technical terms, and go one step at a time.
 - Mac tests use the fake service in `src/test/fakeAuth.ts`; they prove the
   screens, not Supabase. Real sign-in is checked on the PC.
 
-## Tasks and contexts (Phase 2c-2a)
+## Tasks and contexts (Phases 2c-2a and 2c-2b)
 
 - `src/data/types.ts` (shapes and service interfaces), `src/data/supabaseData.ts`
   (the only code reading or writing contexts and tasks), `src/data/slug.ts`.
   Screens get the data layer through `useData()` (`src/app/data/`).
 - Feature code lives in `src/features/`: `contexts/` (useContexts,
   ContextsManager) is deliberately independent of tasks, so notes and calendar
-  can reuse it; `tasks/` holds quick add and the task list. Pages only compose.
+  can reuse it; `tasks/` holds quick add, the Open / Completed / Archived
+  list and the task editor. Pages only compose.
 - Contexts are always created by the owner; none are created automatically.
   "Show on TV" starts off.
 - Mac tests use `src/test/fakeData.ts`. `npm run test:integration` runs the
   real data layer against the local stack on the PC (never on the Mac).
-- Deadlines are not built yet. Approved direction pending: a new migration
-  adding `due_on date` for date-only deadlines beside `due_at` for timed ones,
-  never both. No end-of-day workaround.
+- Deadlines: `due_on` (a calendar date, no time) or `due_at` (an exact
+  moment), never both; the constraint `tasks_one_kind_of_deadline` enforces it
+  (migration `20261015090000_task_due_on.sql`). The data layer always sends
+  both columns together. Helpers in `src/lib/deadlines.ts`; tests run in
+  London time (`vite.config.ts`). `tv_summary()` still returns only `due_at`;
+  changing it belongs to 2c-3.
+- Applying a new migration to the PC's existing local database: `npx supabase
+  migration up --local`. Never `supabase db reset` unless the owner wants the data gone.
 
 ## Before each commit
 
@@ -214,9 +220,12 @@ implement any of these until the owner asks.
   TV without, TV kept to /tv, 50 of 50 real checks). Not yet verified:
   long-running session refresh, session revocation, production readiness.
 - 2c-2a Tasks and contexts (quick add, list, complete, reopen, contexts
-  manager): built on the Mac 14 October 2026; awaiting PC verification.
-  Next: due-date migration (needs approval), then 2c-2b task editor, then
-  2c-3 live Mission Control and TV data. Each needs its own go-ahead.
+  manager): verified on the PC 14 October 2026 (58 of 58 real checks).
+- 2c-2b Task editor (title, notes, priority, date-only and timed deadlines,
+  context, hide from TV, archive and restore, Open / Completed / Archived),
+  plus the `due_on` migration: built on the Mac 14 October 2026; awaiting PC
+  verification (65 real checks expected).
+  Next: 2c-3 live Mission Control and TV data. Needs its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
