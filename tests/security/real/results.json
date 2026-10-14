@@ -1,5 +1,5 @@
 {
-  "fingerprint": "8f951f644e4c",
+  "fingerprint": "3d42434fb2cf",
   "ranOn": "2026-10-14",
   "system": "win32",
   "results": [
@@ -220,6 +220,41 @@
     },
     {
       "id": "NOCODE-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-21",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-22",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-23",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-24",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-09",
       "status": "passed",
       "detail": ""
     },
