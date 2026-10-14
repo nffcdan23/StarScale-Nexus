@@ -1,0 +1,99 @@
+/* The TV's one control. Sizes follow --u (the TV unit) so it scales with the screen. */
+
+.root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: calc(var(--u) * 0.8);
+}
+
+.trigger {
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 3);
+  height: calc(var(--u) * 3);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: rgba(10, 16, 34, 0.35);
+  color: var(--text-primary);
+  cursor: pointer;
+  opacity: 0.22;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+/* Fully visible while woken, hovered, open, or reached with the keyboard */
+.awake .trigger,
+.trigger:hover,
+.trigger:focus-visible {
+  opacity: 1;
+}
+
+.trigger:focus-visible,
+.item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.icon {
+  width: calc(var(--u) * 1.5);
+  height: calc(var(--u) * 1.5);
+  stroke-width: 1.6;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--u) * 0.8);
+  display: grid;
+  gap: calc(var(--u) * 0.5);
+  min-width: calc(var(--u) * 16);
+  max-width: calc(var(--u) * 24);
+  padding: calc(var(--u) * 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: calc(var(--u) * 1);
+  background: rgba(10, 16, 34, 0.92);
+  box-shadow: 0 calc(var(--u) * 0.8) calc(var(--u) * 2.4) rgba(0, 0, 0, 0.45);
+}
+
+.item {
+  padding: calc(var(--u) * 0.7) calc(var(--u) * 1.1);
+  border: none;
+  border-radius: calc(var(--u) * 0.6);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: calc(var(--u) * 1.15);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.question {
+  padding: calc(var(--u) * 0.3) calc(var(--u) * 0.4) calc(var(--u) * 0.2);
+  color: var(--text-primary);
+  font-size: calc(var(--u) * 1.1);
+  line-height: 1.35;
+}
+
+.choices {
+  display: flex;
+  gap: calc(var(--u) * 0.5);
+}
+
+.choices .item {
+  flex: 1;
+  text-align: center;
+}
+
+.danger {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+.danger:hover {
+  background: rgba(248, 113, 113, 0.28);
+}

@@ -71,7 +71,7 @@ describe('Mission Control', () => {
 })
 
 describe('TV dashboard (signed in as the TV)', () => {
-  it('shows the date, time and greeting with no sidebar, links or buttons', async () => {
+  it('shows the date, time and greeting with no sidebar or links, and only the settings button', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date(2026, 9, 13, 20, 42, 0))
     renderApp('/tv', signedInTv())
@@ -79,7 +79,7 @@ describe('TV dashboard (signed in as the TV)', () => {
     expect(await screen.findByText('8:42 PM')).toBeTruthy()
     expect(screen.queryByRole('navigation')).toBeNull()
     expect(screen.queryAllByRole('link')).toHaveLength(0)
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['TV settings'])
     expect(screen.getByText('Tuesday')).toBeTruthy()
     expect(screen.getByText('13 October')).toBeTruthy()
     expect(screen.getByText('Good evening.')).toBeTruthy()

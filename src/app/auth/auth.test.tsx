@@ -56,7 +56,7 @@ describe('route guards', () => {
 
   it('lets the owner preview the TV display', async () => {
     renderApp('/tv', signedInOwner())
-    expect(await screen.findByText('Nothing needs your attention yet.')).toBeTruthy()
+    expect(await screen.findByText('Nothing to show on the TV right now.')).toBeTruthy()
   })
 })
 

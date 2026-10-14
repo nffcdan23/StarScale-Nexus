@@ -101,54 +101,63 @@ export function isOverdue(deadline: Deadline, now: Date): boolean {
   return Date.parse(deadline.at) < now.getTime()
 }
 
+/** Anything with a deadline and a priority: a task, or a task in the TV summary. */
+interface Scheduled {
+  deadline: Deadline
+  priority: Priority
+  createdAt?: string
+}
+
 const priorityRank: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
+// TV summary tasks carry no creation time; the sort keeps their database order.
+const byAge = (a: Scheduled, b: Scheduled) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
 const timeOf = (deadline: Deadline) => (deadline?.kind === 'time' ? Date.parse(deadline.at) : -Infinity)
 
 /** Earliest deadline day first, then priority, then time (all-day first), then oldest. Same as the TV summary. */
-export function byDeadlineThenPriority(a: Task, b: Task): number {
+export function byDeadlineThenPriority(a: Scheduled, b: Scheduled): number {
   const dayA = deadlineDay(a.deadline) ?? '9999-12-31'
   const dayB = deadlineDay(b.deadline) ?? '9999-12-31'
   if (dayA !== dayB) return dayA < dayB ? -1 : 1
   return (
     priorityRank[a.priority] - priorityRank[b.priority] ||
     timeOf(a.deadline) - timeOf(b.deadline) ||
-    a.createdAt.localeCompare(b.createdAt)
+    byAge(a, b)
   )
 }
 
 /** For a timeline: all-day first, then by time, then priority. */
-function byTimeThenPriority(a: Task, b: Task): number {
+function byTimeThenPriority(a: Scheduled, b: Scheduled): number {
   return (
     timeOf(a.deadline) - timeOf(b.deadline) ||
     priorityRank[a.priority] - priorityRank[b.priority] ||
-    a.createdAt.localeCompare(b.createdAt)
+    byAge(a, b)
   )
 }
 
-export interface TodayTasks {
+export interface TodayTasks<T extends Scheduled = Task> {
   /** Open tasks whose deadline has passed. */
-  overdue: Task[]
+  overdue: T[]
   /** Open tasks due later today (London), including date-only tasks due today. */
-  dueToday: Task[]
+  dueToday: T[]
 }
 
-export function todayTasks(open: Task[], now: Date): TodayTasks {
+export function todayTasks<T extends Scheduled>(open: T[], now: Date): TodayTasks<T> {
   const today = londonDate(now)
   const overdue = open.filter((task) => isOverdue(task.deadline, now))
   const dueToday = open.filter((task) => !isOverdue(task.deadline, now) && deadlineDay(task.deadline) === today)
   return { overdue: overdue.sort(byDeadlineThenPriority), dueToday: dueToday.sort(byDeadlineThenPriority) }
 }
 
-export interface UpcomingDay {
+export interface UpcomingDay<T extends Scheduled = Task> {
   day: string
   label: string
-  tasks: Task[]
+  tasks: T[]
 }
 
 /** Open tasks due on each of the next seven London days after today, days with nothing left out. */
-export function nextSevenDays(open: Task[], now: Date): UpcomingDay[] {
+export function nextSevenDays<T extends Scheduled>(open: T[], now: Date): UpcomingDay<T>[] {
   const today = londonDate(now)
-  const days: UpcomingDay[] = []
+  const days: UpcomingDay<T>[] = []
   for (let offset = 1; offset <= 7; offset += 1) {
     const day = addDays(today, offset)
     const tasks = open.filter((task) => deadlineDay(task.deadline) === day).sort(byTimeThenPriority)
@@ -186,7 +195,7 @@ export function contextProgress(contexts: Context[], open: Task[], doneThisWeek:
 const count = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`
 
 /** The greeting panel's two lines, built only from counts. */
-export function dailySummary(today: TodayTasks, openCount: number, doneThisWeekCount: number) {
+export function dailySummary(today: TodayTasks<Scheduled>, openCount: number, doneThisWeekCount: number) {
   const overdue = today.overdue.length
   const due = today.dueToday.length
   let headline: string

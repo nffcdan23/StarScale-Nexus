@@ -148,6 +148,14 @@ plain English, define technical terms, and go one step at a time.
   calls `actions.recheck()`, which shows "session ended" if the sign-in has gone.
 - The Tasks page keeps its list in the address: `/tasks?view=done` or
   `?view=archived`.
+- TV (2c-3c): `src/pages/tv/` uses only `summary.get()` (a test fails if it
+  touches `tasks` or `contexts`). Panels: Today (overdue then due today),
+  Next Up (seven London days), Open by context (counted from the summary; a
+  note appears when the 50-task limit is reached). Four rows per panel, "and
+  N more" in the heading line; sized to fit 1920 x 1080. Same refresh, stale
+  warning and session recheck as Mission Control. `TvSettingsMenu` is faint
+  until the mouse moves or a key is pressed; Escape closes it; sign-out asks
+  first with Cancel focused.
 
 ## Before each commit
 
@@ -226,7 +234,8 @@ plain English, define technical terms, and go one step at a time.
 - The briefing banner and the Ask Nexus command bar come later. Mission
   Control's top panel is where the banner goes, and `--dock-space` reserves
   room for the bar.
-- The TV has no arrows or checkboxes and avoids small text.
+- The TV has no arrows or checkboxes and avoids small text. Its one control
+  is the approved settings menu.
 
 ## Future design improvements
 
@@ -259,9 +268,11 @@ implement any of these until the owner asks.
   plus the `due_on` migration: verified on the PC (65 of 65 real checks).
 - 2c-3a TV summary with date-only deadlines, its checks and `summary.get()`:
   verified on the PC (68 of 68 real checks).
-- 2c-3b Live Mission Control: built on the Mac 14 October 2026; awaiting PC
-  verification (no database change; 68 real checks still expected). Next:
-  2c-3c live TV. Needs its own go-ahead.
+- 2c-3b Live Mission Control: checked by hand on the PC 14 October 2026.
+  Its integration test results were not recorded in the repository.
+- 2c-3c Live TV: built on the Mac 14 October 2026; awaiting PC verification
+  (no database change; 68 real checks still expected). Next step needs the
+  owner's go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
