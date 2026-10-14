@@ -56,8 +56,20 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Pinned to the bottom of the sidebar */
+.footer {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .item {
   position: relative;
+  width: 100%;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: var(--space-3);

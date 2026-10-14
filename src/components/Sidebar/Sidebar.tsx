@@ -1,4 +1,6 @@
+import { LogOut } from 'lucide-react'
 import { NavLink } from 'react-router'
+import { useAuth } from '../../app/auth/authContext'
 import { brand } from '../../app/brand'
 import { navigation } from '../../app/navigation'
 import { GlassPanel } from '../GlassPanel/GlassPanel'
@@ -7,6 +9,8 @@ import styles from './Sidebar.module.css'
 
 /** The desktop sidebar: brand at the top, then the sections listed in navigation.ts. */
 export function Sidebar() {
+  const { actions } = useAuth()
+
   return (
     <GlassPanel tone="strong" padding="none" className={styles.sidebar}>
       <div className={styles.brand}>
@@ -36,6 +40,18 @@ export function Sidebar() {
           </ul>
         ))}
       </nav>
+
+      <div className={styles.footer}>
+        <button
+          type="button"
+          className={styles.item}
+          data-label="Sign out"
+          onClick={() => void actions.signOut()}
+        >
+          <LogOut className={styles.icon} aria-hidden="true" />
+          <span className={styles.label}>Sign out</span>
+        </button>
+      </div>
     </GlassPanel>
   )
 }

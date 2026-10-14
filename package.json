@@ -5,17 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/check-bundle.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:security && npm run build",
     "test:security": "node tests/security/run.mjs",
-    "test:security:real": "node tests/security/run.mjs --target=real"
+    "test:security:real": "node tests/security/run.mjs --target=real",
+    "account": "node scripts/setup-account.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",
+    "@supabase/supabase-js": "2.117.2",
     "lucide-react": "1.52.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

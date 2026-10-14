@@ -76,6 +76,25 @@ plain English, define technical terms, and go one step at a time.
   of Supabase than the imitation already does; mark such checks as needing
   real Supabase.
 
+## Sign-in (Phase 2c-1)
+
+- The browser knows only `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY` (in `.env.local`, PC only; see
+  `.env.example`). `src/data/config.ts` refuses secret keys, and the build
+  runs `scripts/check-bundle.mjs`, which fails on any secret, any other
+  `VITE_` setting, or administrator script code in the app files.
+- Screens use `useAuth()` (`src/app/auth/`); only `src/data/` talks to
+  Supabase. Route guards (`RequireOwner`, `RequireTv`) only choose screens:
+  the database's aal2 rules and `private.identities` are the security.
+- Which screen a sign-in gets comes from `app_metadata.nexus_role` ("owner" or
+  "tv"), set only by the administrator. The owner must enter an authenticator
+  code; the TV signs in with a password only and stays signed in.
+- Accounts are created only with `npm run account -- owner|tv|list` on the
+  Windows PC (`scripts/setup-account.mjs`, refuses any other computer or a
+  non-local stack). It prints a random password once.
+- Mac tests use the fake service in `src/test/fakeAuth.ts`; they prove the
+  screens, not Supabase. Real sign-in is checked on the PC.
+
 ## Before each commit
 
 - Check `git status` for unrelated or sensitive files. `.env` files, keys,
@@ -173,9 +192,12 @@ implement any of these until the owner asks.
 - 1b Foundation shell: done 13 October 2026.
 - 2a Database foundation and simulated security checks: done 13 October 2026.
   Real Supabase checks are written but not yet executed.
-- 2b On the Windows PC: local Supabase stack, then run the real checks. After
-  that, sign-in, task entry and TV summary in the app.
-  2c Go live at £0 (needs a free Supabase project slot).
+- 2b Local Supabase stack on the Windows PC, real checks: done 14 October
+  2026, 50 of 50 passed.
+- 2c-1 Sign-in: built and tested on the Mac 14 October 2026; awaiting
+  verification on the PC. Next: 2c-2 tasks and contexts, 2c-3 live Mission
+  Control and TV data (plan approved, each needs its own go-ahead).
+- Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
 - 4 Daily-use version: pages built from the designs, manual backup and restore.

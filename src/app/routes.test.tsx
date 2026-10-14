@@ -1,19 +1,15 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { act, fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { renderApp, signedInTv } from '../test/renderApp'
 import { navigation } from './navigation'
-import { routes } from './routes'
 
-function renderAt(path: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] })
-  return render(<RouterProvider router={router} />)
-}
+// Sign-in is settled asynchronously, so these use the "find" queries, which wait.
 
-describe('desktop shell', () => {
-  it('lists exactly the three working sections in the sidebar', () => {
-    renderAt('/')
+describe('desktop shell (signed in as the owner with a code)', () => {
+  it('lists exactly the three working sections in the sidebar', async () => {
+    renderApp('/')
 
-    const nav = screen.getByRole('navigation', { name: 'Primary' })
+    const nav = await screen.findByRole('navigation', { name: 'Primary' })
     const labels = within(nav)
       .getAllByRole('link')
       .map((link) => link.textContent)
@@ -21,53 +17,49 @@ describe('desktop shell', () => {
     expect(labels).toEqual(['Mission Control', 'Tasks', 'Projects'])
   })
 
-  it('opens Mission Control at the root address and marks it as current', () => {
-    renderAt('/')
+  it('opens Mission Control at the root address and marks it as current', async () => {
+    renderApp('/')
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Mission Control' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Mission Control' }).getAttribute('aria-current')).toBe(
-      'page',
-    )
+    expect(await screen.findByRole('heading', { level: 1, name: 'Mission Control' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Mission Control' }).getAttribute('aria-current')).toBe('page')
   })
 
   it('moves between pages and updates which section is current', async () => {
-    renderAt('/')
+    renderApp('/')
 
-    fireEvent.click(screen.getByRole('link', { name: 'Tasks' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Tasks' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Tasks' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Tasks' }).getAttribute('aria-current')).toBe('page')
-    expect(
-      screen.getByRole('link', { name: 'Mission Control' }).getAttribute('aria-current'),
-    ).toBeNull()
+    expect(screen.getByRole('link', { name: 'Mission Control' }).getAttribute('aria-current')).toBeNull()
 
     fireEvent.click(screen.getByRole('link', { name: 'Projects' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Projects' }).getAttribute('aria-current')).toBe('page')
   })
 
-  it('has a working page behind every sidebar entry', () => {
+  it('has a working page behind every sidebar entry', async () => {
     for (const entry of navigation.flatMap((group) => group.entries)) {
-      const { unmount } = renderAt(entry.path)
-      expect(screen.getByRole('heading', { level: 1, name: entry.label })).toBeTruthy()
+      const { unmount } = renderApp(entry.path)
+      expect(await screen.findByRole('heading', { level: 1, name: entry.label })).toBeTruthy()
       unmount()
     }
   })
 
-  it('shows a not-found page for an unknown address', () => {
-    renderAt('/nowhere')
+  it('shows a not-found page for an unknown address', async () => {
+    renderApp('/nowhere')
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Page not found' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Back to Mission Control' })).toBeTruthy()
   })
 })
 
 describe('Mission Control', () => {
-  it('greets by time of day and shows the date and a clock that keeps time', () => {
-    vi.useFakeTimers()
+  it('greets by time of day and shows the date and a clock that keeps time', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date(2026, 9, 13, 8, 5, 30))
-    renderAt('/')
+    renderApp('/')
 
-    expect(screen.getByText('Good morning.')).toBeTruthy()
+    expect(await screen.findByText('Good morning.')).toBeTruthy()
     expect(screen.getByText('Tuesday 13 October 2026')).toBeTruthy()
     expect(screen.getByText('8:05 AM')).toBeTruthy()
 
@@ -78,19 +70,18 @@ describe('Mission Control', () => {
   })
 })
 
-describe('TV dashboard', () => {
-  it('shows the date, time and greeting with no sidebar, links or buttons', () => {
-    vi.useFakeTimers()
+describe('TV dashboard (signed in as the TV)', () => {
+  it('shows the date, time and greeting with no sidebar, links or buttons', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date(2026, 9, 13, 20, 42, 0))
-    renderAt('/tv')
+    renderApp('/tv', signedInTv())
 
+    expect(await screen.findByText('8:42 PM')).toBeTruthy()
     expect(screen.queryByRole('navigation')).toBeNull()
     expect(screen.queryAllByRole('link')).toHaveLength(0)
     expect(screen.queryAllByRole('button')).toHaveLength(0)
-
     expect(screen.getByText('Tuesday')).toBeTruthy()
     expect(screen.getByText('13 October')).toBeTruthy()
-    expect(screen.getByText('8:42 PM')).toBeTruthy()
     expect(screen.getByText('Good evening.')).toBeTruthy()
   })
 })
