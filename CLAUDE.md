@@ -95,6 +95,22 @@ plain English, define technical terms, and go one step at a time.
 - Mac tests use the fake service in `src/test/fakeAuth.ts`; they prove the
   screens, not Supabase. Real sign-in is checked on the PC.
 
+## Tasks and contexts (Phase 2c-2a)
+
+- `src/data/types.ts` (shapes and service interfaces), `src/data/supabaseData.ts`
+  (the only code reading or writing contexts and tasks), `src/data/slug.ts`.
+  Screens get the data layer through `useData()` (`src/app/data/`).
+- Feature code lives in `src/features/`: `contexts/` (useContexts,
+  ContextsManager) is deliberately independent of tasks, so notes and calendar
+  can reuse it; `tasks/` holds quick add and the task list. Pages only compose.
+- Contexts are always created by the owner; none are created automatically.
+  "Show on TV" starts off.
+- Mac tests use `src/test/fakeData.ts`. `npm run test:integration` runs the
+  real data layer against the local stack on the PC (never on the Mac).
+- Deadlines are not built yet. Approved direction pending: a new migration
+  adding `due_on date` for date-only deadlines beside `due_at` for timed ones,
+  never both. No end-of-day workaround.
+
 ## Before each commit
 
 - Check `git status` for unrelated or sensitive files. `.env` files, keys,
@@ -194,9 +210,13 @@ implement any of these until the owner asks.
   Real Supabase checks are written but not yet executed.
 - 2b Local Supabase stack on the Windows PC, real checks: done 14 October
   2026, 50 of 50 passed.
-- 2c-1 Sign-in: built and tested on the Mac 14 October 2026; awaiting
-  verification on the PC. Next: 2c-2 tasks and contexts, 2c-3 live Mission
-  Control and TV data (plan approved, each needs its own go-ahead).
+- 2c-1 Sign-in: verified on the PC 14 October 2026 (owner with authenticator,
+  TV without, TV kept to /tv, 50 of 50 real checks). Not yet verified:
+  long-running session refresh, session revocation, production readiness.
+- 2c-2a Tasks and contexts (quick add, list, complete, reopen, contexts
+  manager): built on the Mac 14 October 2026; awaiting PC verification.
+  Next: due-date migration (needs approval), then 2c-2b task editor, then
+  2c-3 live Mission Control and TV data. Each needs its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

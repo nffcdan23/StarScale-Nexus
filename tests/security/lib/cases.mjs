@@ -167,6 +167,64 @@ export const cases = [
     expect: passes(summaryIsRedacted),
   },
 
+  // Operations the Tasks page relies on (Phase 2c-2a).
+  {
+    id: 'OWNER-15',
+    identity: 'ownerWithCode',
+    title: 'Reopening a task clears its completion time',
+    sql: `update public.tasks set status = 'open' where id = '${ids.taskDone}' returning completed_at`,
+    expect: passes((rows) => (rows.length === 1 && rows[0].completed_at === null ? null : `got ${JSON.stringify(rows)}`)),
+  },
+  {
+    id: 'OWNER-16',
+    identity: 'ownerWithCode',
+    title: 'Can archive their own task',
+    sql: `update public.tasks set archived_at = now() where id = '${ids.taskVisible}'`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'OWNER-17',
+    identity: 'ownerWithCode',
+    title: 'Can restore their own archived task',
+    sql: `update public.tasks set archived_at = null where id = '${ids.taskArchived}'`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'OWNER-18',
+    identity: 'ownerWithCode',
+    title: 'Can rename a context and change its TV setting',
+    sql: `update public.contexts set name = 'Renamed', show_on_tv = false where id = '${ids.contextVisible}'`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'OWNER-19',
+    identity: 'ownerWithCode',
+    title: 'Cannot hand a context to another owner',
+    sql: `update public.contexts set owner_id = '${ids.otherOwner}' where id = '${ids.contextVisible}'`,
+    expect: tableRefused('contexts'),
+  },
+  {
+    id: 'OWNER-20',
+    identity: 'ownerWithCode',
+    title: 'Cannot change another owner\'s context',
+    sql: `update public.contexts set show_on_tv = false where id = '${ids.contextOther}'`,
+    expect: changesRows(0),
+  },
+  {
+    id: 'TV-09',
+    identity: 'tv',
+    title: 'Cannot change any context or its TV setting',
+    sql: 'update public.contexts set show_on_tv = true',
+    expect: changesRows(0),
+  },
+  {
+    id: 'NOCODE-06',
+    identity: 'ownerNoCode',
+    title: 'Cannot change any context or its TV setting',
+    sql: 'update public.contexts set show_on_tv = true',
+    expect: changesRows(0),
+  },
+
   // A TV sign-in that enrols its own authenticator must gain nothing.
   { id: 'TVCODE-01', identity: 'tvWithCode', title: 'Still sees no tasks directly', sql: readTasks, expect: seesRows(0) },
   { id: 'TVCODE-02', identity: 'tvWithCode', title: 'Still cannot add a task', sql: addTask, expect: blockedByRules },

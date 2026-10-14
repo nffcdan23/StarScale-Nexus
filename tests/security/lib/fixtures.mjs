@@ -10,6 +10,8 @@ export const ids = {
   contextPrivate: 'aaaaaaaa-0000-4000-8000-000000000002',
   contextOther: 'aaaaaaaa-0000-4000-8000-000000000003',
   taskVisible: 'bbbbbbbb-0000-4000-8000-000000000001',
+  taskDone: 'bbbbbbbb-0000-4000-8000-000000000004',
+  taskArchived: 'bbbbbbbb-0000-4000-8000-000000000005',
   taskOther: 'bbbbbbbb-0000-4000-8000-000000000006',
 }
 

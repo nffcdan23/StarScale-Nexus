@@ -54,7 +54,7 @@ function requireField(response, step, read) {
 }
 
 /** A standard six-digit authenticator code for a secret given in base32. */
-function authenticatorCode(base32Secret) {
+export function authenticatorCode(base32Secret) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
   let bits = ''
   for (const char of base32Secret.replace(/=+$/, '').toUpperCase()) {
