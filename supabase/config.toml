@@ -174,7 +174,9 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# Nexus: off. Nexus is private; sign-ins are created only by the administrator.
+# This switch blocks every new sign-up, whatever the method. Checked by REAL-08.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -219,6 +221,9 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
+# Nexus: left on deliberately. New sign-ups are already blocked by
+# [auth] enable_signup above. In the Supabase tool this switch may also turn
+# off email-and-password sign-in altogether, which the owner and TV need.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -300,9 +305,11 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# Nexus: on. The owner signs in with a password plus an authenticator code,
+# and the database refuses the owner's data without that code. Checked by REAL-05.
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

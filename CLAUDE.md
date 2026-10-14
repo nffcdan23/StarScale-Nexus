@@ -57,8 +57,16 @@ plain English, define technical terms, and go one step at a time.
   signed-in user), runs every access check, and proves the checks notice a
   removed protection. `tests/security/README.md` explains the layout.
 - `npm run test:security:real` runs the same checks, plus real sign-in and
-  Data API checks, against a local Supabase stack on the Windows PC. It was
-  written without a stack to test it on and has never been executed.
+  Data API checks, against a local Supabase stack on the Windows PC. First
+  run 14 October 2026: 48 of 50 passed; REAL-05 and REAL-08 failed because
+  of local settings (fixed in `supabase/config.toml`, awaiting a re-run).
+- `supabase/config.toml` must keep sign-ups off (`[auth] enable_signup =
+  false`) and authenticator codes on (`[auth.mfa.totp]`). Settings changes
+  need the stack stopped and started again.
+- `pg` and `supabase` are development dependencies needed only on the PC, and
+  are not installed on the MacBook. Ask the owner before reinstalling the
+  Mac's packages, because `npm ci` would add both (the Supabase package would
+  stay inert, since install scripts are blocked).
 - Results go to `docs/security-report.md`, which is generated, not written by
   hand. Every check is reported as Passed, FAILED, Not executed, Not possible
   or Stale. **A simulated pass is never proof that real Supabase security
@@ -180,7 +188,5 @@ implement any of these until the owner asks.
 
 - How many active free-plan Supabase projects the owner's account has (the
   limit is two; this decides whether go-live can be free).
-- No Supabase settings file (`supabase/config.toml`) exists yet. Let the
-  Supabase tool create it on the Windows PC rather than writing it by hand.
 - Windows details for the TV check: edition, display arrangement and scale,
   everyday browser, virtual desktops.

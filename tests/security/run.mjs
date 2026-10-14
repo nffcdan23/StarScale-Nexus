@@ -61,12 +61,19 @@ try {
   applyResult = { status: 'failed', detail: error.message }
 }
 
-let realFailed = false
+let realCounts = null
+let realStartError = null
 if (target === 'real') {
   // Loaded only when asked for, so the simulated run needs nothing extra installed.
   const { runReal } = await import('./real/run-real.mjs')
-  realFailed = await runReal({ suite, fingerprint: currentFingerprint })
+  const expectedIds = [...cases.map((testCase) => testCase.id), ...realOnlyCases.map((testCase) => testCase.id)]
+  try {
+    realCounts = await runReal({ suite, fingerprint: currentFingerprint, expectedIds })
+  } catch (error) {
+    realStartError = error.message
+  }
 }
+const realFailed = target === 'real' && (realStartError !== null || realCounts.failed > 0 || realCounts.notExecuted > 0)
 
 const real = await loadRealResults()
 await writeReport(
@@ -86,11 +93,16 @@ console.log(`Migrations apply (PGlite): ${applyResult.status}`)
 console.log(`Written rules: ${passed(staticResults)} of ${staticResults.length} passed`)
 console.log(`Simulated access checks (PGlite): ${passed(mockResults)} of ${cases.length} passed`)
 console.log(`Self-test (removed protections caught): ${passed(selfTests)} of ${mutations.length}`)
-console.log(
-  target === 'real'
-    ? `Real Supabase checks: ${realFailed ? 'FAILED, see the report' : 'passed'}`
-    : `Real Supabase checks: not executed in this run (${realOnlyCases.length} need real Supabase)`,
-)
+if (target !== 'real') {
+  console.log(`Real Supabase checks: not executed in this run (${realOnlyCases.length} can only run on real Supabase)`)
+} else if (realStartError) {
+  console.log(`Real Supabase checks: NOT STARTED, nothing was run: ${realStartError}`)
+} else {
+  console.log(
+    `Real Supabase checks: ${realCounts.passed} passed, ${realCounts.failed} failed, ` +
+      `${realCounts.notExecuted} not executed, of ${realCounts.total}`,
+  )
+}
 for (const failure of failures) console.log(`FAILED ${failure.id}: ${failure.detail}`)
 console.log(`Report: ${reportPath}`)
 if (target !== 'real') {

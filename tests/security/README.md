@@ -25,20 +25,28 @@ check as each identity, then removes protections one at a time from a copy
 of the migrations to prove the checks notice. Nothing is written outside the
 project, and nothing leaves the computer.
 
-## Real checks (Windows PC, later; never yet executed)
+## Real checks (Windows PC only)
 
-1. Install a container tool and the Supabase tool on the PC.
-2. Start the local Supabase stack and apply `supabase/migrations` to it, with
-   sign-ups switched off.
-3. Add the `pg` package (a PostgreSQL client) as a development dependency.
-4. Copy `.env.security.example` to `.env.security.local` and fill it in.
-5. Run `npm run test:security:real`.
-6. Commit the updated `docs/security-report.md` and
+1. Start the local Supabase stack. It applies `supabase/migrations` and reads
+   `supabase/config.toml`, which must keep:
+   - `[auth] enable_signup = false`: no public sign-ups (checked by REAL-08).
+   - `[auth.mfa.totp] enroll_enabled = true` and `verify_enabled = true`:
+     authenticator codes work (checked by REAL-05).
+   Changes to `config.toml` take effect only after the stack is stopped and
+   started again.
+2. Copy `.env.security.example` to `.env.security.local` and fill it in.
+3. Run `npm run test:security:real`. The last line gives passed, failed and
+   not executed counts out of 50.
+4. Commit the updated `docs/security-report.md` and
    `tests/security/real/results.json`, so the results travel back with Git.
 
-The real runner refuses to run against anything but the local computer. It
-was written without a Supabase stack to test it on, so expect to adjust it
-on first use.
+The real runner refuses to run against anything but the local computer.
+Every expected check is recorded as passed, failed or not executed; if the
+run stops early, the checks it never reached are recorded as not executed, so
+an older result can never look current.
+
+`pg` and `supabase` are in the development dependencies for the PC. Do not
+install them on the work MacBook: the simulated checks do not need them.
 
 ## Where things are
 

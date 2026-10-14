@@ -1,12 +1,13 @@
 // Checks that go through Supabase's real sign-in service and Data API, the
 // same way the Nexus app will. They cannot be imitated.
 //
-// STATUS: written, never executed. The web addresses below follow Supabase's
-// documented sign-in and Data API routes as understood when this was
-// written; confirm them against the current documentation on first use.
+// First run on the Windows PC (14 October 2026): routes confirmed working,
+// except the authenticator steps, which the local settings had switched off.
 
 import { createHmac, randomUUID } from 'node:crypto'
 import { secretNote } from '../lib/fixtures.mjs'
+
+export const apiCheckIds = ['REAL-02', 'REAL-03', 'REAL-04', 'REAL-05', 'REAL-06', 'REAL-07', 'REAL-08']
 
 async function call(config, path, { method = 'GET', key = config.publishableKey, token, body } = {}) {
   const response = await fetch(`${config.apiUrl}${path}`, {
@@ -29,6 +30,28 @@ async function call(config, path, { method = 'GET', key = config.publishableKey,
 }
 
 const refused = (response) => response.status === 401 || response.status === 403
+const succeeded = (response) => response.status >= 200 && response.status < 300
+
+/** One line describing a reply, for example "status 422 (mfa_totp_enroll_not_enabled): ...". */
+function describe(response) {
+  const data = response.data ?? {}
+  const code = data.error_code ?? data.code
+  const message = data.msg ?? data.message ?? data.error_description ?? data.error
+  return `status ${response.status}${code ? ` (${code})` : ''}${message ? `: ${message}` : ''}`
+}
+
+/**
+ * Stops with a clear message unless the request succeeded and the reply
+ * contains the named field. This is what turns an unexpected reply into a
+ * readable failure instead of a crash.
+ */
+function requireField(response, step, read) {
+  const value = succeeded(response) ? read(response.data ?? {}) : undefined
+  if (value === undefined || value === null || value === '') {
+    throw new Error(`${step} failed, ${describe(response)}`)
+  }
+  return value
+}
 
 /** A standard six-digit authenticator code for a secret given in base32. */
 function authenticatorCode(base32Secret) {
@@ -53,17 +76,20 @@ async function createUser(config, label) {
     key: config.secretKey,
     body: { email, password, email_confirm: true },
   })
-  if (!created.data?.id) throw new Error(`could not create the ${label} test sign-in (status ${created.status})`)
-  return { id: created.data.id, email, password }
+  const id = requireField(created, `Creating the ${label} test sign-in`, (data) => data.id)
+  return { id, email, password }
 }
 
-async function signIn(config, user) {
+async function deleteUser(config, id) {
+  await call(config, `/auth/v1/admin/users/${id}`, { method: 'DELETE', key: config.secretKey })
+}
+
+async function signIn(config, user, label) {
   const response = await call(config, '/auth/v1/token?grant_type=password', {
     method: 'POST',
     body: { email: user.email, password: user.password },
   })
-  if (!response.data?.access_token) throw new Error(`sign-in failed (status ${response.status})`)
-  return response.data.access_token
+  return requireField(response, `Password sign-in for the ${label}`, (data) => data.access_token)
 }
 
 /** Enrols an authenticator and returns a session that has passed the second factor. */
@@ -73,14 +99,18 @@ async function passSecondFactor(config, token) {
     token,
     body: { factor_type: 'totp', friendly_name: 'nexus-test' },
   })
-  const challenge = await call(config, `/auth/v1/factors/${factor.data.id}/challenge`, { method: 'POST', token })
-  const verified = await call(config, `/auth/v1/factors/${factor.data.id}/verify`, {
+  const factorId = requireField(factor, 'Setting up an authenticator', (data) => data.id)
+  const secret = requireField(factor, 'Setting up an authenticator', (data) => data.totp?.secret)
+
+  const challenge = await call(config, `/auth/v1/factors/${factorId}/challenge`, { method: 'POST', token })
+  const challengeId = requireField(challenge, 'Requesting an authenticator challenge', (data) => data.id)
+
+  const verified = await call(config, `/auth/v1/factors/${factorId}/verify`, {
     method: 'POST',
     token,
-    body: { challenge_id: challenge.data.id, code: authenticatorCode(factor.data.totp.secret) },
+    body: { challenge_id: challengeId, code: authenticatorCode(secret) },
   })
-  if (!verified.data?.access_token) throw new Error(`authenticator verification failed (status ${verified.status})`)
-  return verified.data.access_token
+  return requireField(verified, 'Verifying the authenticator code', (data) => data.access_token)
 }
 
 export async function runApiChecks(config, db) {
@@ -96,87 +126,105 @@ export async function runApiChecks(config, db) {
 
   const users = []
   try {
-    const owner = await createUser(config, 'owner')
-    const tv = await createUser(config, 'tv')
-    users.push(owner, tv)
+    let owner, tv, contextId
+    try {
+      owner = await createUser(config, 'owner')
+      users.push(owner)
+      tv = await createUser(config, 'tv')
+      users.push(tv)
 
-    const contextId = randomUUID()
-    await db.query(
-      `insert into private.identities (user_id, kind, owner_id) values ($1, 'owner', null), ($2, 'tv', $1)`,
-      [owner.id, tv.id],
-    )
-    await db.query(
-      `insert into public.contexts (id, owner_id, name, slug, show_on_tv) values ($1, $2, 'StarScale', 'starscale', true)`,
-      [contextId, owner.id],
-    )
-    await db.query(
-      `insert into public.tasks (owner_id, context_id, title, notes, hide_from_tv) values
-         ($1, $2, 'Visible task', $3, false), ($1, $2, 'Hidden task', null, true)`,
-      [owner.id, contextId, secretNote],
-    )
+      contextId = randomUUID()
+      await db.query(
+        `insert into private.identities (user_id, kind, owner_id) values ($1, 'owner', null), ($2, 'tv', $1)`,
+        [owner.id, tv.id],
+      )
+      await db.query(
+        `insert into public.contexts (id, owner_id, name, slug, show_on_tv) values ($1, $2, 'StarScale', 'starscale', true)`,
+        [contextId, owner.id],
+      )
+      await db.query(
+        `insert into public.tasks (owner_id, context_id, title, notes, hide_from_tv) values
+           ($1, $2, 'Visible task', $3, false), ($1, $2, 'Hidden task', null, true)`,
+        [owner.id, contextId, secretNote],
+      )
+    } catch (error) {
+      // Without the test sign-ins none of these checks can run. Record them
+      // as not executed, so the report never shows an older result as current.
+      return apiCheckIds.map((id) => ({ id, status: 'not-executed', detail: `setup failed: ${error.message}` }))
+    }
 
     const tasksPath = '/rest/v1/tasks?select=id,title'
     const newTask = { context_id: contextId, title: 'Added through the Data API' }
 
     await check('REAL-02', async () => {
       const response = await call(config, tasksPath)
-      return refused(response) ? null : `expected a refusal, got status ${response.status}`
+      return refused(response) ? null : `expected a refusal, got ${describe(response)}`
     })
 
     await check('REAL-03', async () => {
       const response = await call(config, '/rest/v1/rpc/tv_summary', { method: 'POST', body: {} })
-      return refused(response) || response.status === 404 ? null : `expected a refusal, got status ${response.status}`
+      return refused(response) || response.status === 404 ? null : `expected a refusal, got ${describe(response)}`
     })
 
-    const ownerToken = await signIn(config, owner)
-
+    // Signing in is part of each check below, so a sign-in failure is
+    // reported against the checks that needed it.
     await check('REAL-04', async () => {
+      const ownerToken = await signIn(config, owner, 'owner')
       const read = await call(config, tasksPath, { token: ownerToken })
-      if (read.status !== 200 || read.data.length !== 0) return `password alone returned ${JSON.stringify(read.data)}`
+      if (read.status !== 200 || !Array.isArray(read.data) || read.data.length !== 0) {
+        return `password alone should see no tasks, got ${describe(read)} ${JSON.stringify(read.data)}`
+      }
       const write = await call(config, '/rest/v1/tasks', { method: 'POST', token: ownerToken, body: newTask })
-      return refused(write) ? null : `password alone could add a task (status ${write.status})`
+      return refused(write) ? null : `password alone could add a task, ${describe(write)}`
     })
 
     await check('REAL-05', async () => {
+      const ownerToken = await signIn(config, owner, 'owner')
       const strongToken = await passSecondFactor(config, ownerToken)
       const read = await call(config, tasksPath, { token: strongToken })
-      if (read.status !== 200 || read.data.length !== 2) return `expected 2 tasks, got status ${read.status}`
+      if (read.status !== 200 || !Array.isArray(read.data) || read.data.length !== 2) {
+        return `expected 2 tasks after the authenticator code, got ${describe(read)} ${JSON.stringify(read.data)}`
+      }
       const write = await call(config, '/rest/v1/tasks', { method: 'POST', token: strongToken, body: newTask })
-      return write.status === 201 && write.data[0]?.owner_id === owner.id
+      return write.status === 201 && write.data?.[0]?.owner_id === owner.id
         ? null
-        : `could not add a task as the owner (status ${write.status})`
+        : `could not add a task as the owner, ${describe(write)}`
     })
 
-    const tvToken = await signIn(config, tv)
-
     await check('REAL-06', async () => {
+      const tvToken = await signIn(config, tv, 'TV')
       const summary = await call(config, '/rest/v1/rpc/tv_summary', { method: 'POST', token: tvToken, body: {} })
       const titles = summary.data?.tasks?.map((task) => task.title).sort()
       if (summary.status !== 200 || !titles?.includes('Visible task') || titles.includes('Hidden task')) {
-        return `unexpected summary: ${JSON.stringify(summary.data)}`
+        return `unexpected summary, ${describe(summary)} ${JSON.stringify(summary.data)}`
       }
       if (JSON.stringify(summary.data).includes(secretNote)) return 'the summary leaked a task note'
       const read = await call(config, tasksPath, { token: tvToken })
-      return read.status === 200 && read.data.length === 0 ? null : 'the TV sign-in could read tasks directly'
+      return read.status === 200 && Array.isArray(read.data) && read.data.length === 0
+        ? null
+        : `the TV sign-in could read tasks directly, ${describe(read)}`
     })
 
     await check('REAL-07', async () => {
+      const tvToken = await signIn(config, tv, 'TV')
       const write = await call(config, '/rest/v1/tasks', { method: 'POST', token: tvToken, body: newTask })
-      return refused(write) ? null : `the TV sign-in could add a task (status ${write.status})`
+      return refused(write) ? null : `the TV sign-in could add a task, ${describe(write)}`
     })
 
     await check('REAL-08', async () => {
       const response = await call(config, '/auth/v1/signup', {
         method: 'POST',
-        body: { email: `nexus-test-signup-${randomUUID()}@example.test`, password: randomUUID() },
+        body: { email: `nexus-test-signup-${randomUUID()}@example.test`, password: randomUUID() + randomUUID() },
       })
-      return response.status >= 400 ? null : 'a new sign-up was accepted; switch sign-ups off in the local settings'
+      if (response.status >= 400) return null
+      // The sign-up got through. Remove the account it created, then fail.
+      const strayId = response.data?.user?.id ?? response.data?.id
+      if (strayId) await deleteUser(config, strayId)
+      return `a new sign-up was accepted (${describe(response)}); switch sign-ups off in supabase/config.toml and restart the stack`
     })
   } finally {
     // Removing a test sign-in also removes its contexts and tasks.
-    for (const user of users) {
-      await call(config, `/auth/v1/admin/users/${user.id}`, { method: 'DELETE', key: config.secretKey })
-    }
+    for (const user of users) await deleteUser(config, user.id)
   }
 
   return results

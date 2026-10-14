@@ -1,13 +1,9 @@
 // Runs the security checks against a REAL local Supabase stack.
 //
-// STATUS: written on a machine without Supabase and never executed. Expect
-// to adjust details (connection settings, the made-up sign-in records) the
-// first time it runs on the Windows PC.
-//
-// Before running, on that PC:
-//   1. Start the local Supabase stack and apply the migrations to it.
-//   2. Install the "pg" package (a PostgreSQL client), with the owner's approval.
-//   3. Copy .env.security.example to .env.security.local and fill it in from
+// Before running, on the Windows PC:
+//   1. Start the local Supabase stack (it applies supabase/migrations and
+//      reads supabase/config.toml when it starts).
+//   2. Copy .env.security.example to .env.security.local and fill it in from
 //      the values the local stack prints when it starts.
 
 import { existsSync } from 'node:fs'
@@ -61,13 +57,24 @@ async function connect(dbUrl) {
   }
 }
 
-/** Runs everything, records the results, and returns true if anything failed. */
-export async function runReal({ suite, fingerprint }) {
+/**
+ * Runs every real check and records the outcome. Every expected check ends up
+ * as passed, failed or not executed: a check that never ran is never left
+ * showing an older result.
+ *
+ * Returns { passed, failed, notExecuted, total }.
+ */
+export async function runReal({ suite, fingerprint, expectedIds }) {
+  // Problems found here (missing settings, a non-local address) stop the run
+  // before anything is touched, and leave the previous results file alone.
   const config = readConfig()
-  const db = await connect(config.dbUrl)
-  const results = []
 
+  const results = []
+  let aborted = null
+  let db = null
   try {
+    db = await connect(config.dbUrl)
+
     const applied = await db.query(
       "select to_regclass('public.tasks') is not null and to_regprocedure('public.tv_summary()') is not null as ok",
     )
@@ -81,8 +88,17 @@ export async function runReal({ suite, fingerprint }) {
     // roles, default permissions and auth functions.
     results.push(...(await runCases(db, suite)))
     results.push(...(await runApiChecks(config, db)))
+  } catch (error) {
+    aborted = error.message
   } finally {
-    await db.close()
+    if (db) await db.close()
+  }
+
+  const recorded = new Set(results.map((result) => result.id))
+  for (const id of expectedIds) {
+    if (!recorded.has(id)) {
+      results.push({ id, status: 'not-executed', detail: aborted ? `run stopped: ${aborted}` : 'not run' })
+    }
   }
 
   await writeFile(
@@ -92,6 +108,7 @@ export async function runReal({ suite, fingerprint }) {
         fingerprint,
         ranOn: new Date().toISOString().slice(0, 10),
         system: process.platform,
+        ...(aborted ? { aborted } : {}),
         results: results.map(({ id, status, detail }) => ({ id, status, detail })),
       },
       null,
@@ -100,8 +117,17 @@ export async function runReal({ suite, fingerprint }) {
     'utf8',
   )
 
-  for (const result of results.filter((entry) => entry.status === 'failed')) {
-    console.log(`FAILED on real Supabase ${result.id}: ${result.detail}`)
+  if (aborted) console.log(`Real run stopped early: ${aborted}`)
+  for (const result of results.filter((entry) => entry.status !== 'passed')) {
+    const label = result.status === 'failed' ? 'FAILED' : 'NOT EXECUTED'
+    console.log(`${label} on real Supabase ${result.id}: ${result.detail}`)
   }
-  return results.some((entry) => entry.status === 'failed')
+
+  const count = (status) => results.filter((entry) => entry.status === status).length
+  return {
+    passed: count('passed'),
+    failed: count('failed'),
+    notExecuted: count('not-executed'),
+    total: expectedIds.length,
+  }
 }

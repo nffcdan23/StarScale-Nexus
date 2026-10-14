@@ -13,12 +13,15 @@ counts as a security pass.
 
 ## Summary
 
-| Level | Passed | Failed | Not executed or stale |
-| --- | --- | --- | --- |
-| Simulated (PGlite) | 42 | 0 | 0 |
-| Real Supabase | 48 | 2 | 0 |
+| Level | Passed | Failed | Not executed | Stale | Total |
+| --- | --- | --- | --- | --- | --- |
+| Simulated (PGlite) | 42 | 0 | 0 | 0 | 42 |
+| Real Supabase | 48 | 2 | 0 | 0 | 50 |
 
-Last real run: 2026-10-14 on win32, migrations fingerprint `8f951f644e4c`.
+Simulated rows count only checks run inside PGlite. Real rows count only checks
+run against a real local Supabase stack. A check is never counted in both.
+
+Last real run: 2026-10-14 on win32, migrations fingerprint `8f951f644e4c` (current).
 
 ## Migrations and written rules
 

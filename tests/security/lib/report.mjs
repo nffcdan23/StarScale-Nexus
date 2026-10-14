@@ -17,7 +17,7 @@ const NOT_EXECUTED = 'Not executed'
 /** What to print in the "Real Supabase" column for one check. */
 function realStatus(id, real, currentFingerprint) {
   const result = real?.results?.find((entry) => entry.id === id)
-  if (!result) return NOT_EXECUTED
+  if (!result || result.status === 'not-executed') return NOT_EXECUTED
   const word = result.status === 'passed' ? 'Passed' : 'FAILED'
   // Results from an older version of the migrations prove nothing about this one.
   return real.fingerprint === currentFingerprint ? word : `Stale (${word.toLowerCase()}), re-run needed`
@@ -30,7 +30,8 @@ function count(statuses) {
   return {
     passed: statuses.filter((status) => status === 'Passed').length,
     failed: statuses.filter((status) => status === 'FAILED').length,
-    other: statuses.filter((status) => status !== 'Passed' && status !== 'FAILED').length,
+    notExecuted: statuses.filter((status) => status === NOT_EXECUTED).length,
+    stale: statuses.filter((status) => status.startsWith('Stale')).length,
   }
 }
 
@@ -60,14 +61,19 @@ export function buildReport({ fingerprint, applyResult, staticResults, mockResul
     '',
     '## Summary',
     '',
-    row(['Level', 'Passed', 'Failed', 'Not executed or stale']),
-    row(['---', '---', '---', '---']),
-    row(['Simulated (PGlite)', mockCounts.passed, mockCounts.failed, 0]),
-    row(['Real Supabase', realCounts.passed, realCounts.failed, realCounts.other]),
+    row(['Level', 'Passed', 'Failed', 'Not executed', 'Stale', 'Total']),
+    row(['---', '---', '---', '---', '---', '---']),
+    row(['Simulated (PGlite)', mockCounts.passed, mockCounts.failed, 0, 0, mockResults.length]),
+    row(['Real Supabase', realCounts.passed, realCounts.failed, realCounts.notExecuted, realCounts.stale, realTotal]),
+    '',
+    'Simulated rows count only checks run inside PGlite. Real rows count only checks',
+    'run against a real local Supabase stack. A check is never counted in both.',
     '',
     real
-      ? `Last real run: ${real.ranOn} on ${real.system}, migrations fingerprint \`${real.fingerprint}\`.`
+      ? `Last real run: ${real.ranOn} on ${real.system}, migrations fingerprint \`${real.fingerprint}\`` +
+        (real.fingerprint === fingerprint ? ' (current).' : ' (older migrations: re-run needed).')
       : 'Real Supabase checks have never been run.',
+    ...(real?.aborted ? ['', `The last real run stopped early: ${real.aborted}`] : []),
     '',
     '## Migrations and written rules',
     '',
