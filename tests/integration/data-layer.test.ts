@@ -181,6 +181,23 @@ describe('data layer against real Supabase (owner with an authenticator code)', 
     expect(cleared.deadline).toBeNull()
   })
 
+  it('lists tasks completed since a moment, for Mission Control\'s weekly counts', async () => {
+    const context = await ownerData.contexts.create('Completed since')
+    const before = new Date(Date.now() - 60_000)
+    const kept = await ownerData.tasks.create({ contextId: context.id, title: 'Completed and kept' })
+    await ownerData.tasks.setDone(kept.id, true)
+    const archived = await ownerData.tasks.create({ contextId: context.id, title: 'Completed then archived' })
+    await ownerData.tasks.setDone(archived.id, true)
+    await ownerData.tasks.setArchived(archived.id, true)
+    const open = await ownerData.tasks.create({ contextId: context.id, title: 'Still open' })
+
+    const ids = (await ownerData.tasks.completedSince(before)).map((task) => task.id)
+    expect(ids).toContain(kept.id)
+    expect(ids).not.toContain(archived.id)
+    expect(ids).not.toContain(open.id)
+    expect((await ownerData.tasks.completedSince(new Date(Date.now() + 60 * 60_000))).map((task) => task.id)).not.toContain(kept.id)
+  })
+
   it('archives a task out of the open list and restores it', async () => {
     const context = await ownerData.contexts.create('Archive')
     const task = await ownerData.tasks.create({ contextId: context.id, title: 'Archive me' })
@@ -240,6 +257,7 @@ describe('data layer against real Supabase (TV sign-in)', () => {
     expect(await tvData.contexts.list({ includeArchived: true })).toEqual([])
     expect(await tvData.tasks.list('open')).toEqual([])
     expect(await tvData.tasks.list('archived')).toEqual([])
+    expect(await tvData.tasks.completedSince(new Date(0))).toEqual([])
   })
 
   it('cannot create a context', async () => {

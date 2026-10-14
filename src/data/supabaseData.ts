@@ -189,6 +189,18 @@ function tasksService(client: SupabaseClient): TasksService {
       return (data as TaskRow[]).map(toTask)
     },
 
+    async completedSince(since) {
+      const { data, error } = await client
+        .from('tasks')
+        .select(taskColumns)
+        .eq('status', 'done')
+        .is('archived_at', null)
+        .gte('completed_at', since.toISOString())
+        .order('completed_at', { ascending: false })
+      if (error) throw toDataError(error, 'load your completed tasks')
+      return (data as TaskRow[]).map(toTask)
+    },
+
     async create({ contextId, title: rawTitle }) {
       const title = trimmed(rawTitle, 'task', limits.taskTitle)
       // The id is made here, so a retried request can never create a second copy.

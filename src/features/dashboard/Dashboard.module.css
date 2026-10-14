@@ -1,0 +1,218 @@
+/* Mission Control cards, after the Today / Next / Projects cards in the reference design */
+
+.card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.cardIcon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  stroke-width: 1.6;
+}
+
+.cardTitles {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+}
+
+.cardSubtitle {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.viewAll {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.viewAll:hover {
+  color: var(--text-primary);
+}
+
+.viewAllArrow {
+  width: 16px;
+  height: 16px;
+}
+
+.muted {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.cardMessage {
+  margin: 0;
+}
+
+/* Task rows, as in the Tasks list */
+.rows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.rowText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.rowTitle {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overdue {
+  color: var(--color-danger);
+}
+
+.dueToday {
+  color: var(--color-warning);
+}
+
+.more {
+  justify-self: start;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.more:hover {
+  color: var(--text-primary);
+}
+
+/* Next Up: a timeline of days */
+.timeline {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dayLabel {
+  margin-bottom: var(--space-2);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.timelineList {
+  display: grid;
+}
+
+.timelineItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: 72px 12px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+/* The line joining one dot to the next */
+.timelineItem:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: -4px;
+  left: calc(72px + var(--space-3) + 5px);
+  width: 2px;
+  background: rgba(127, 176, 255, 0.25);
+}
+
+.timelineTime {
+  padding-top: 1px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timelineDot {
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--color-accent-strong);
+  box-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+/* Contexts: counts with a bar */
+.progressList {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.progressRow {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.progressText {
+  display: grid;
+  min-width: 0;
+}
+
+.bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.barFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent-strong);
+}
+
+.footnote {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}

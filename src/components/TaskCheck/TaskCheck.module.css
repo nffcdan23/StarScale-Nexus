@@ -1,0 +1,41 @@
+/* The round-cornered task checkbox from the reference design's Today card */
+
+.check {
+  flex: none;
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.check:hover {
+  border-color: var(--color-accent);
+}
+
+.check:checked {
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent-strong);
+}
+
+.check:checked::after {
+  content: '';
+  width: 6px;
+  height: 11px;
+  margin-top: -2px;
+  border: solid var(--color-ink-950);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.check:disabled {
+  cursor: default;
+}

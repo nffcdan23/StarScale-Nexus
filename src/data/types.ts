@@ -105,6 +105,8 @@ export interface ContextsService {
 export interface TasksService {
   /** Open or completed tasks that are not archived, or archived tasks. */
   list(view: TaskView): Promise<Task[]>
+  /** Tasks completed at or after this moment that are still completed and not archived, newest first. */
+  completedSince(since: Date): Promise<Task[]>
   create(task: NewTask): Promise<Task>
   update(id: string, changes: TaskChanges): Promise<Task>
   setDone(id: string, done: boolean): Promise<Task>

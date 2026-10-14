@@ -128,6 +128,18 @@ describe('Task filters', () => {
     expect(within(screen.getByRole('group', { name: 'Show tasks' })).getByRole('button', { name: 'Archived' }).getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('opens the list named in the address, and keeps the chosen list there', async () => {
+    const { data, contexts } = withContexts('Personal')
+    data.addTask(contexts[0].id, 'Finished', { status: 'done', completedAt: '2026-10-14T10:00:00Z' })
+    const { router } = renderApp('/tasks?view=done', signedInOwner(), data)
+
+    expect(await within(await screen.findByRole('region', { name: 'Completed tasks' })).findByText('Finished')).toBeTruthy()
+    await showList('Archived')
+    expect(router.state.location.search).toBe('?view=archived')
+    await showList('Open')
+    expect(router.state.location.search).toBe('')
+  })
+
   it('returns to the open list when a task is added from another list', async () => {
     const { data } = withContexts('Personal')
     renderApp('/tasks', signedInOwner(), data)
@@ -219,7 +231,7 @@ describe('Task editor', () => {
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(data.taskRows[0].deadline).toBeNull())
-    expect(within(await rowOf('Pay invoice')).queryByText(/Due/)).toBeNull()
+    await waitFor(async () => expect(within(await rowOf('Pay invoice')).queryByText(/Due/)).toBeNull())
   })
 
   it('marks a missed deadline as overdue', async () => {

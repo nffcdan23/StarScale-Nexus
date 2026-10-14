@@ -16,7 +16,7 @@ function recordingClient(replies: Reply[]) {
       const call = { table, steps: [] as Array<[string, unknown[]]> }
       calls.push(call)
       const builder: Record<string, unknown> = {}
-      for (const method of ['select', 'insert', 'update', 'eq', 'is', 'not', 'order', 'limit', 'single']) {
+      for (const method of ['select', 'insert', 'update', 'eq', 'is', 'not', 'gte', 'order', 'limit', 'single']) {
         builder[method] = (...args: unknown[]) => {
           call.steps.push([method, args])
           return builder
@@ -153,6 +153,16 @@ describe('tasks', () => {
     expect(calls[0].steps).toContainEqual(['eq', ['status', 'open']])
     expect(calls[1].steps).toContainEqual(['is', ['archived_at', null]])
     expect(calls[1].steps).toContainEqual(['eq', ['status', 'done']])
+  })
+
+  it('lists tasks completed since a moment, leaving out archived ones', async () => {
+    const { services, calls } = recordingClient([{ data: [taskRow] }])
+    const tasks = await services.tasks.completedSince(new Date('2026-10-11T23:00:00Z'))
+    expect(calls[0].steps).toContainEqual(['eq', ['status', 'done']])
+    expect(calls[0].steps).toContainEqual(['is', ['archived_at', null]])
+    expect(calls[0].steps).toContainEqual(['gte', ['completed_at', '2026-10-11T23:00:00.000Z']])
+    expect(stepNames(calls[0].steps)).not.toContain('limit')
+    expect(tasks.map((task) => task.id)).toEqual(['t1'])
   })
 
   it('lists archived tasks whatever their status, newest first', async () => {

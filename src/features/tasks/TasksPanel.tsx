@@ -1,8 +1,10 @@
 import { useCallback, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { useData } from '../../app/data/dataContext'
 import form from '../../components/Form/Form.module.css'
 import { GlassPanel } from '../../components/GlassPanel/GlassPanel'
 import { PriorityBadge } from '../../components/PriorityBadge/PriorityBadge'
+import { TaskCheck } from '../../components/TaskCheck/TaskCheck'
 import { limits, type Context, type Priority, type Task, type TaskView } from '../../data/types'
 import { cx } from '../../lib/cx'
 import { deadlineState, formatDeadline } from '../../lib/deadlines'
@@ -31,7 +33,10 @@ const views: Array<{ view: TaskView; label: string; empty: string }> = [
 /** Quick add, and one list of tasks: open, completed or archived. */
 export function TasksPanel({ contexts }: { contexts: Context[] }) {
   const { tasks } = useData()
-  const [view, setView] = useState<TaskView>('open')
+  // The chosen list lives in the address (/tasks?view=done), so other pages
+  // can link straight to it and a reload keeps it.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view: TaskView = views.find((entry) => entry.view === searchParams.get('view'))?.view ?? 'open'
   const [editingId, setEditingId] = useState<string | null>(null)
   // Each result remembers which list it belongs to, so switching lists never
   // shows the previous list's tasks under the new heading.
@@ -49,7 +54,7 @@ export function TasksPanel({ contexts }: { contexts: Context[] }) {
   }
 
   const choose = (next: TaskView) => {
-    setView(next)
+    setSearchParams(next === 'open' ? {} : { view: next }, { replace: true })
     setEditingId(null)
   }
 
@@ -210,14 +215,7 @@ function TaskRow({ task, context, now, busy, onToggle, onEdit, onRestore }: Task
   return (
     <li className={styles.row}>
       {!archived && (
-        <input
-          type="checkbox"
-          className={styles.check}
-          checked={done}
-          disabled={busy}
-          onChange={onToggle}
-          aria-label={done ? `Reopen “${task.title}”` : `Complete “${task.title}”`}
-        />
+        <TaskCheck title={task.title} done={done} disabled={busy} onToggle={onToggle} />
       )}
       <div className={styles.text}>
         <span className={done ? styles.doneTitle : styles.title}>{task.title}</span>

@@ -86,6 +86,7 @@ export function AuthProvider({ service, configProblem = null, children }: AuthPr
         await require().signOut()
         await reload()
       },
+      recheck: () => reload(!signingOut.current),
     }
   }, [service, reload])
 

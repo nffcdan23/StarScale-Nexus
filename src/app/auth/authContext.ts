@@ -14,6 +14,11 @@ export interface AuthActions {
   startEnrolment(): Promise<Enrolment>
   finishEnrolment(factorId: string, code: string): Promise<void>
   signOut(): Promise<void>
+  /**
+   * Reads the sign-in again, for when the database refuses a request. If the
+   * session has quietly ended, the app shows that it has.
+   */
+  recheck(): Promise<void>
 }
 
 export interface AuthContextValue {

@@ -94,4 +94,9 @@ export class FakeAuthService implements AuthService {
     this.current_ = null
     this.emit('signed-out')
   }
+
+  /** The session ends without any event, as when it expires while the computer sleeps. */
+  expireQuietly() {
+    this.current_ = null
+  }
 }

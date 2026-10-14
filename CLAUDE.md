@@ -135,6 +135,19 @@ plain English, define technical terms, and go one step at a time.
   Refresh now and Sign out (confirmed before signing out). Otherwise the TV
   stays control-free, minimal and readable across a room, and shows clearly
   when its information is stale or offline.
+- Mission Control (2c-3b): `src/lib/dashboard.ts` holds every calculation,
+  always on London calendar days (Intl with Europe/London, never the
+  computer's zone): overdue = date-only before today or timed moment passed;
+  today = rest of today; Next Up = the seven London days after today; week =
+  from Monday 00:00 London. "Done this week" counts tasks still completed and
+  not archived (`tasks.completedSince`). Progress bar = done this week ÷
+  (done this week + open), stated on the card. Cards in `src/features/dashboard/`.
+- Live refresh: `src/lib/useLiveData.ts` loads every 30 seconds while visible,
+  on becoming visible, and when the network returns; a failed refresh keeps
+  the last data and the page says it may be out of date. A refused request
+  calls `actions.recheck()`, which shows "session ended" if the sign-in has gone.
+- The Tasks page keeps its list in the address: `/tasks?view=done` or
+  `?view=archived`.
 
 ## Before each commit
 
@@ -245,9 +258,10 @@ implement any of these until the owner asks.
   context, hide from TV, archive and restore, Open / Completed / Archived),
   plus the `due_on` migration: verified on the PC (65 of 65 real checks).
 - 2c-3a TV summary with date-only deadlines, its checks and `summary.get()`:
-  built on the Mac 14 October 2026; awaiting PC verification (68 real checks
-  expected). Next: 2c-3b live Mission Control, then 2c-3c live TV. Each needs
-  its own go-ahead.
+  verified on the PC (68 of 68 real checks).
+- 2c-3b Live Mission Control: built on the Mac 14 October 2026; awaiting PC
+  verification (no database change; 68 real checks still expected). Next:
+  2c-3c live TV. Needs its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

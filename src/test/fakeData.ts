@@ -20,11 +20,17 @@ export class FakeData implements DataServices {
   taskRows: Task[] = []
   /** When set, the next write fails with this error (then clears). */
   failNextWrite: DataError | null = null
+  /** While set, every read fails with this error. */
+  failReads: DataError | null = null
 
   private takeFailure() {
     const failure = this.failNextWrite
     this.failNextWrite = null
     if (failure) throw failure
+  }
+
+  private checkRead() {
+    if (this.failReads) throw this.failReads
   }
 
   private findTask(id: string) {
@@ -67,8 +73,10 @@ export class FakeData implements DataServices {
   }
 
   contexts: DataServices['contexts'] = {
-    list: async ({ includeArchived = false } = {}) =>
-      this.contextRows.filter((context) => includeArchived || !context.archivedAt).map((context) => ({ ...context })),
+    list: async ({ includeArchived = false } = {}) => {
+      this.checkRead()
+      return this.contextRows.filter((context) => includeArchived || !context.archivedAt).map((context) => ({ ...context }))
+    },
     create: async (name) => {
       this.takeFailure()
       const trimmed = name.trim()
@@ -96,15 +104,24 @@ export class FakeData implements DataServices {
   }
 
   tasks: DataServices['tasks'] = {
-    list: async (view: TaskView) =>
-      this.taskRows
+    list: async (view: TaskView) => {
+      this.checkRead()
+      return this.taskRows
         .filter((task) => (view === 'archived' ? task.archivedAt : task.status === view && !task.archivedAt))
         .sort((a, b) => {
           if (view === 'archived') return (b.archivedAt ?? '').localeCompare(a.archivedAt ?? '')
           if (view === 'done') return (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
           return a.createdAt.localeCompare(b.createdAt)
         })
-        .map((task) => ({ ...task })),
+        .map((task) => ({ ...task }))
+    },
+    completedSince: async (since) => {
+      this.checkRead()
+      return this.taskRows
+        .filter((task) => task.status === 'done' && !task.archivedAt && task.completedAt && task.completedAt >= since.toISOString())
+        .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
+        .map((task) => ({ ...task }))
+    },
     create: async ({ contextId, title }) => {
       this.takeFailure()
       this.findContext(contextId)
@@ -148,7 +165,9 @@ export class FakeData implements DataServices {
    * the security checks, never by this.
    */
   summary: DataServices['summary'] = {
-    get: async () => ({
+    get: async () => {
+      this.checkRead()
+      return {
       generatedAt: now(),
       tasks: this.taskRows
         .filter((task) => {
@@ -169,6 +188,7 @@ export class FakeData implements DataServices {
           priority: task.priority,
           deadline: task.deadline,
         })),
-    }),
+      }
+    },
   }
 }
