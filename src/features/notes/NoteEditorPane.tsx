@@ -10,7 +10,8 @@ import form from '../../components/Form/Form.module.css'
 import { DataError, limits, type Context, type Note, type NoteChanges, type NoteDoc } from '../../data/types'
 import { cx } from '../../lib/cx'
 import { londonClock } from '../../lib/dashboard'
-import { noteText } from '../../lib/noteText'
+import { ConflictResolver } from './ConflictResolver'
+import { copyTitle, sameAsDatabase } from './conflicts'
 import { drafts, registerOpenNote, type NoteDraft } from './drafts'
 import { createNoteExtensions } from './editor/extensions'
 import { FormatToolbar } from './editor/FormatToolbar'
@@ -23,6 +24,8 @@ const emptyDoc: NoteDoc = { type: 'doc', content: [] }
 
 /** Wait after an edit before keeping a copy on this computer (also kept at once on leaving or closing). */
 const DRAFT_DELAY = 300
+
+const asDataError = (error: unknown) => (error instanceof DataError ? error : new DataError('unknown', String(error)))
 
 interface NoteEditorPaneProps {
   /** Null for a new note that has not been saved yet. */
@@ -41,8 +44,8 @@ interface Opening {
   newNoteId: string
   /** Unsaved changes from this computer, safe to apply on top of note. */
   restored: NoteDraft | null
-  /** Unsaved changes kept aside because the database has a newer version. */
-  held: NoteDraft | null
+  /** Versions from this computer that conflict with the database, oldest first, to resolve. */
+  held: NoteDraft[]
 }
 
 /**
@@ -56,7 +59,7 @@ export function NoteEditorPane({ noteId, editorSession, contexts, onChanged }: N
   const ownerId = state.phase === 'ready' && state.snapshot.status === 'owner' ? state.snapshot.userId : null
   const [initialId] = useState(noteId)
   const [opening, setOpening] = useState<Opening | null>(() =>
-    initialId ? null : { note: null, newNoteId: crypto.randomUUID(), restored: null, held: null },
+    initialId ? null : { note: null, newNoteId: crypto.randomUUID(), restored: null, held: [] },
   )
   const [failure, setFailure] = useState<DataError | null>(null)
 
@@ -64,27 +67,41 @@ export function NoteEditorPane({ noteId, editorSession, contexts, onChanged }: N
     if (!initialId) return
     let active = true
     const draft = ownerId ? drafts.read(ownerId, initialId) : null
-    const heldBefore = ownerId ? drafts.read(ownerId, initialId, true) : null
     notes.get(initialId).then(
       (note) => {
         if (!active) return
+        const held: NoteDraft[] = []
+        /** Keeps a version to resolve, filed under its own id (only in memory if it cannot be stored). */
+        const toResolve = (version: NoteDraft) => {
+          // A version that already says exactly what the database holds needs no decision.
+          if (sameAsDatabase(version, note)) {
+            if (version.held) drafts.removeHeld(version)
+            else drafts.remove(version.ownerId, version.noteId)
+            return
+          }
+          const kept = version.held && version.heldId ? version : drafts.hold(version)
+          held.push(kept ?? { ...version, held: true, heldId: version.heldId ?? crypto.randomUUID() })
+        }
+
+        const heldBefore = ownerId ? drafts.readHeld(ownerId, initialId) : []
+        for (const version of heldBefore) toResolve(version)
         let restored: NoteDraft | null = null
-        let held = heldBefore
         if (draft) {
           // Safe to apply only if made on the version the database still has
-          // (or, for a note this computer created, on that first version).
+          // (or, for a note this computer created, on that first version), and
+          // only when nothing else is waiting to be resolved first.
           const sameVersion = draft.baseRevision === note.revision || (draft.isNew && note.revision === 1)
-          if (sameVersion && !note.archivedAt) restored = draft
-          else held = drafts.hold(draft) ? { ...draft, held: true } : draft
+          if (sameVersion && !note.archivedAt && held.length === 0) restored = draft
+          else toResolve(draft)
         }
         setOpening({ note, newNoteId: initialId, restored, held })
       },
       (error: unknown) => {
         if (!active) return
-        const problem = error instanceof DataError ? error : new DataError('unknown', String(error))
+        const problem = asDataError(error)
         // A note created on this computer that never reached the database.
         if (problem.kind === 'missing' && draft?.isNew) {
-          setOpening({ note: null, newNoteId: initialId, restored: draft, held: null })
+          setOpening({ note: null, newNoteId: initialId, restored: draft, held: [] })
           return
         }
         if (problem.kind === 'refused') void actions.recheck()
@@ -164,7 +181,10 @@ interface Live {
   edits: number
   /** The edit count last kept on this computer and read back (-1: none). */
   draftedEdits: number
+  /** Two versions are waiting for the owner's decision: saving is paused. */
   conflict: boolean
+  /** Whether every version waiting for a decision is safely kept on this computer. */
+  conflictKept: boolean
 }
 
 const unsaved = (live: Pick<Live, 'saved' | 'title' | 'contextId' | 'contentVersion' | 'savedContentVersion'>) =>
@@ -182,12 +202,24 @@ type Phase =
   | { kind: 'refreshed'; at: Date }
   | { kind: 'failed'; reason: DataError['kind']; message: string }
 
+/** The conflict screen's state: versions to resolve, and the database's latest version. */
+interface Resolution {
+  queue: NoteDraft[]
+  latest: Note | null
+  loadError: string | null
+  error: string | null
+  notice: string | null
+  busy: boolean
+}
+
 function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: NoteEditorProps) {
   const { notes } = useData()
   const { actions } = useAuth()
   const navigate = useNavigate()
   const titleId = useId()
   const { note, restored, newNoteId } = opening
+  // This editing session: it removes only the drafts it wrote itself.
+  const [writer] = useState(() => crypto.randomUUID())
   // Whether this browser can keep copies of unsaved changes at all.
   const [storageOk] = useState(() => Boolean(ownerId) && drafts.available())
 
@@ -202,7 +234,8 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
     savedContentVersion: 0,
     edits: restored ? 1 : 0,
     draftedEdits: restored ? 1 : -1,
-    conflict: false,
+    conflict: opening.held.length > 0,
+    conflictKept: opening.held.every((version) => drafts.readHeld(version.ownerId, version.noteId).some((stored) => stored.heldId === version.heldId)),
   }))
   const live = useRef<Live>({ ...view })
   const sync = useCallback(() => setView({ ...live.current }), [])
@@ -212,21 +245,28 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
   const [problem, setProblem] = useState<string | null>(null)
   const [leaveFailed, setLeaveFailed] = useState(false)
   const [restoredNotice, setRestoredNotice] = useState<NoteDraft | null>(restored)
-  const [held, setHeld] = useState<NoteDraft | null>(opening.held)
-  const [showHeld, setShowHeld] = useState(false)
+  const [keptCopy, setKeptCopy] = useState<{ id: string; title: string } | null>(null)
+  const [resolution, setResolution] = useState<Resolution>(() => ({
+    queue: opening.held,
+    latest: opening.held.length > 0 ? note : null,
+    loadError: null,
+    error: null,
+    notice: null,
+    busy: false,
+  }))
 
   const { saved, title, contextId } = view
   const archived = Boolean(saved.archivedAt)
   const isNew = saved.id === null
   const dirty = unsaved(view)
-  const keptHere = dirty && view.draftedEdits === view.edits
+  const keptHere = view.conflict ? view.conflictKept : dirty && view.draftedEdits === view.edits
 
   // The latest document, kept so a copy can still be made while the editor closes.
   const latestDoc = useRef<ProseMirrorNode | null>(null)
   const editor = useEditor({
     extensions: createNoteExtensions(),
     content: (restored?.content ?? note?.content ?? emptyDoc) as JSONContent,
-    editable: !archived,
+    editable: !archived && opening.held.length === 0,
     editorProps: { attributes: { 'aria-label': 'Note text', class: styles.prose } },
     onCreate: ({ editor: created }) => {
       latestDoc.current = created.state.doc
@@ -240,9 +280,14 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
   })
 
   useEffect(() => {
-    // Without false, switching would count as an edit.
-    editor.setEditable(!archived, false)
-  }, [editor, archived])
+    // Without false, switching would count as an edit. No editing while a conflict waits.
+    editor.setEditable(!archived && !view.conflict, false)
+  }, [editor, archived, view.conflict])
+
+  // Restored changes now belong to this session, so its confirmed save can remove them.
+  useEffect(() => {
+    if (restored && ownerId) drafts.write({ ...restored, writer })
+  }, [restored, ownerId, writer])
 
   const editTitle = (value: string) => {
     live.current.title = value
@@ -261,6 +306,8 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
    */
   const keepDraft = useCallback((): boolean => {
     const current = live.current
+    // During a conflict your version is already kept aside, and the editor is not editable.
+    if (current.conflict) return current.conflictKept
     if (!unsaved(current)) return true
     if (current.draftedEdits === current.edits) return true
     if (!ownerId || !latestDoc.current) return false
@@ -274,11 +321,12 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
       content: latestDoc.current.toJSON() as NoteDoc,
       changedAt: new Date().toISOString(),
       held: false,
+      writer,
     })
     current.draftedEdits = ok ? current.edits : -1
     sync()
     return ok
-  }, [ownerId, newNoteId, sync])
+  }, [ownerId, newNoteId, writer, sync])
 
   // A copy shortly after each edit, and at once when the tab is hidden or the page closes.
   useEffect(() => {
@@ -307,6 +355,94 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
   }, [])
 
   const { blocker, allowNextNavigation } = useUnsavedChangesGuard(dirty, keepDraft)
+
+  /** Shows a version from the database in place of what is on screen. */
+  const showVersion = useCallback(
+    (fresh: Note) => {
+      editor.commands.setContent(fresh.content as JSONContent, { emitUpdate: false })
+      latestDoc.current = editor.state.doc
+      live.current = {
+        ...live.current,
+        saved: savedFrom(fresh),
+        title: fresh.title,
+        contextId: fresh.contextId,
+        savedContentVersion: live.current.contentVersion,
+        draftedEdits: -1,
+      }
+      sync()
+    },
+    [editor, sync],
+  )
+
+  /** Fetches the database's latest version for the conflict screen. */
+  const loadLatest = useCallback(
+    async (id: string): Promise<Note | null> => {
+      setResolution((current) => ({ ...current, loadError: null }))
+      try {
+        const fresh = await notes.get(id)
+        setResolution((current) => ({ ...current, latest: fresh }))
+        return fresh
+      } catch (error) {
+        const failure = asDataError(error)
+        if (failure.kind === 'refused') void actions.recheck()
+        setResolution((current) => ({ ...current, loadError: `Could not load the latest version. ${failure.message}` }))
+        return null
+      }
+    },
+    [notes, actions],
+  )
+
+  /**
+   * One version is settled: its copy on this computer goes, the editor shows
+   * the version that now stands, and the next waiting version (if any) is shown.
+   */
+  const settle = useCallback(
+    (version: NoteDraft, standing: Note) => {
+      drafts.removeHeld(version)
+      showVersion(standing)
+      setResolution((current) => {
+        const queue = current.queue.filter((waiting) => waiting.heldId !== version.heldId)
+        live.current.conflict = queue.length > 0
+        sync()
+        return { ...current, queue, latest: standing, error: null, notice: null, busy: false }
+      })
+      setPhase({ kind: 'idle' })
+      onChanged()
+    },
+    [showVersion, sync, onChanged],
+  )
+
+  /**
+   * A save was refused because the note changed elsewhere: put your version
+   * aside on this computer (under its own id), stop saving, and show both.
+   */
+  const enterConflict = useCallback(async () => {
+    const current = live.current
+    if (!current.saved.id || !latestDoc.current) return
+    const mine: NoteDraft = {
+      ownerId: ownerId ?? '',
+      noteId: current.saved.id,
+      isNew: false,
+      baseRevision: current.saved.revision,
+      title: current.title,
+      contextId: current.contextId,
+      content: latestDoc.current.toJSON() as NoteDoc,
+      changedAt: new Date().toISOString(),
+      held: true,
+      heldId: crypto.randomUUID(),
+      writer,
+    }
+    const kept = Boolean(ownerId) && drafts.write(mine)
+    // Your version now lives in the conflict record; this session's ordinary draft is no longer needed.
+    if (kept && ownerId) drafts.remove(ownerId, mine.noteId, writer)
+    current.conflict = true
+    current.conflictKept = kept
+    sync()
+    setResolution((state) => ({ ...state, queue: [...state.queue, mine], error: null, notice: null }))
+    const fresh = await loadLatest(mine.noteId)
+    // Already identical (the same edit saved elsewhere): nothing to decide.
+    if (fresh && sameAsDatabase(mine, fresh)) settle(mine, fresh)
+  }, [ownerId, writer, sync, loadLatest, settle])
 
   /** One save attempt with the latest edits; autosave decides when. */
   const saveOnce = useCallback(async (): Promise<SaveOutcome> => {
@@ -337,8 +473,8 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
       live.current.saved = savedFrom(result)
       live.current.savedContentVersion = version
       if (!unsaved(live.current)) {
-        // The database has confirmed everything: only now is the local copy removed.
-        if (ownerId) drafts.remove(ownerId, result.id)
+        // The database has confirmed everything: only now is this session's local copy removed.
+        if (ownerId) drafts.remove(ownerId, result.id, writer)
       } else {
         // Still unsaved edits: keep them again, now based on the new revision.
         live.current.draftedEdits = -1
@@ -355,12 +491,11 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
       }
       return 'saved'
     } catch (error) {
-      const failure = error instanceof DataError ? error : new DataError('unknown', String(error))
+      const failure = asDataError(error)
       if (failure.kind === 'conflict') {
         // Stop saving this note until the owner decides; nothing is overwritten.
-        live.current.conflict = true
-        sync()
         setPhase({ kind: 'idle' })
+        void enterConflict()
         return 'stop'
       }
       setPhase({ kind: 'failed', reason: failure.kind, message: failure.message })
@@ -371,7 +506,7 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
       }
       return 'retry'
     }
-  }, [editor, notes, newNoteId, ownerId, keepDraft, sync, onChanged, allowNextNavigation, navigate, editorSession, actions])
+  }, [editor, notes, newNoteId, ownerId, writer, keepDraft, sync, onChanged, allowNextNavigation, navigate, editorSession, actions, enterConflict])
 
   const { saveNow, retrying } = useAutosave({
     editCount: view.edits,
@@ -416,25 +551,6 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
     }
   }, [blocker, saveNow, keepDraft])
 
-  /** Shows a version from the database in place of what is on screen. */
-  const showVersion = useCallback(
-    (fresh: Note) => {
-      editor.commands.setContent(fresh.content as JSONContent, { emitUpdate: false })
-      latestDoc.current = editor.state.doc
-      live.current = {
-        ...live.current,
-        saved: savedFrom(fresh),
-        title: fresh.title,
-        contextId: fresh.contextId,
-        savedContentVersion: live.current.contentVersion,
-        draftedEdits: -1,
-        conflict: false,
-      }
-      sync()
-    },
-    [editor, sync],
-  )
-
   // Changes made on another device: while nothing here is unsaved, check the
   // note's revision every 30 seconds and whenever the tab is shown, and load
   // a newer version quietly. With unsaved changes the save itself detects
@@ -453,7 +569,7 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
           const editsBefore = live.current.edits
           const fresh = await notes.get(noteId)
           // Typing started meanwhile: leave it; the next save will notice the conflict.
-          if (!active || live.current.edits !== editsBefore || unsaved(live.current)) return
+          if (!active || live.current.edits !== editsBefore || unsaved(live.current) || live.current.conflict) return
           showVersion(fresh)
           setPhase({ kind: 'refreshed', at: new Date(fresh.updatedAt) })
           onChanged()
@@ -478,6 +594,89 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
     }
   }, [noteId, notes, showVersion, sync, onChanged])
 
+  // ---- The three ways to settle a conflict ----------------------------------
+
+  const resolving = resolution.queue[0] ?? null
+  const failResolution = (error: unknown) => {
+    const failure = asDataError(error)
+    if (failure.kind === 'refused') void actions.recheck()
+    setResolution((current) => ({ ...current, busy: false, error: `${failure.message} Your version is still kept; nothing was lost.` }))
+  }
+  const startResolving = () => setResolution((current) => ({ ...current, busy: true, error: null, notice: null }))
+
+  /** Keep both: your version becomes a new note (its id fixed, so a retry never makes two); the latest stays. */
+  const keepBoth = async () => {
+    const version = resolving
+    const latest = resolution.latest
+    if (!version || !latest) return
+    startResolving()
+    try {
+      const copy = await notes.create(
+        { title: copyTitle(version), content: version.content, contextId: version.contextId },
+        { id: version.heldId },
+      )
+      // Confirmed by the database: only now does the local copy go.
+      setKeptCopy({ id: copy.id, title: copy.title })
+      settle(version, latest)
+    } catch (error) {
+      failResolution(error)
+    }
+  }
+
+  /** Use the latest version: discard yours (after confirmation) and show the newest saved version. */
+  const chooseLatest = async () => {
+    const version = resolving
+    const shown = resolution.latest
+    if (!version || !shown) return
+    startResolving()
+    let standing = shown
+    try {
+      standing = await notes.get(version.noteId)
+    } catch {
+      // Offline: the version already shown is the latest known; it is what the owner confirmed.
+    }
+    settle(version, standing)
+  }
+
+  /**
+   * Use my version: check the database still holds the version shown, then
+   * save yours over it, guarded by its revision. If it changed again, stop
+   * and show the newer version instead.
+   */
+  const chooseMine = async () => {
+    const version = resolving
+    const shown = resolution.latest
+    if (!version || !shown || shown.archivedAt) return
+    startResolving()
+    const changedAgain = async () => {
+      const fresh = await loadLatest(version.noteId)
+      setResolution((current) => ({
+        ...current,
+        busy: false,
+        notice: fresh
+          ? 'The note changed again on another device while you were deciding. This is now the latest version: please choose again.'
+          : null,
+      }))
+    }
+    try {
+      const check = await notes.peek(version.noteId)
+      if (check.revision !== shown.revision || check.archivedAt !== shown.archivedAt) {
+        await changedAgain()
+        return
+      }
+      const result = await notes.save(
+        version.noteId,
+        { title: version.title, content: version.content, contextId: version.contextId },
+        shown.revision,
+      )
+      settle(version, result)
+      setPhase({ kind: 'saved', at: new Date() })
+    } catch (error) {
+      if (asDataError(error).kind === 'conflict') await changedAgain()
+      else failResolution(error)
+    }
+  }
+
   const runAction = async (work: () => Promise<Partial<Saved>>, after?: () => void) => {
     setBusy(true)
     setProblem(null)
@@ -488,7 +687,7 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
       onChanged()
       after?.()
     } catch (error) {
-      const failure = error instanceof DataError ? error : new DataError('unknown', String(error))
+      const failure = asDataError(error)
       if (failure.kind === 'refused') void actions.recheck()
       setProblem(failure.message)
     } finally {
@@ -503,20 +702,6 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
       () => navigate('/notes'),
     )
   const restore = () => runAction(async () => ({ archivedAt: (await notes.setArchived(saved.id!, false)).archivedAt }))
-
-  const reloadNote = async () => {
-    if (!saved.id) return
-    setBusy(true)
-    try {
-      showVersion(await notes.get(saved.id))
-      setPhase({ kind: 'idle' })
-      setProblem(null)
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   /** The owner chose to throw away the changes restored from this computer. */
   const discardRestored = () => {
@@ -533,21 +718,21 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
     navigate('/notes')
   }
 
-  const deleteHeld = () => {
-    if (ownerId && held) drafts.remove(ownerId, held.noteId, true)
-    setHeld(null)
-    setShowHeld(false)
-  }
-
   // An archived context stays listed only for a note already in it.
   const contextChoices = contexts.filter((context) => !context.archivedAt || context.id === contextId)
+  const contextName = (id: string | null) => {
+    if (!id) return 'Uncategorised'
+    const context = contexts.find((entry) => entry.id === id)
+    if (!context) return 'Unknown context'
+    return context.archivedAt ? `${context.name} (archived)` : context.name
+  }
 
   let status: string
   let warning = false
   if (view.conflict) {
     status = keptHere
-      ? 'Not saved: changed on another device. Your changes are kept on this computer.'
-      : 'Not saved: changed on another device'
+      ? 'Not saved: two versions to choose from. Yours is kept on this computer.'
+      : 'Not saved: two versions to choose from'
     warning = true
   } else if (phase.kind === 'saving') {
     status = 'Saving…'
@@ -588,7 +773,7 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
           className={styles.context}
           aria-label="Context"
           value={contextId ?? ''}
-          disabled={archived}
+          disabled={archived || view.conflict}
           onChange={(event) => editContext(event.target.value || null)}
         >
           <option value="">Uncategorised</option>
@@ -602,7 +787,7 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
           {status}
         </span>
         <div className={styles.actions}>
-          {!isNew && !archived && (
+          {!isNew && !archived && !view.conflict && (
             <>
               <button
                 className={styles.iconButton}
@@ -627,11 +812,11 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
               </button>
             </>
           )}
-          {!archived && (
+          {!archived && !view.conflict && (
             <button
               className={styles.saveNow}
               type="button"
-              disabled={!dirty || phase.kind === 'saving' || view.conflict}
+              disabled={!dirty || phase.kind === 'saving'}
               onClick={() => void saveNow()}
             >
               Save now
@@ -671,7 +856,16 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
         </div>
       )}
 
-      {restoredNotice && (
+      {keptCopy && !view.conflict && (
+        <div className={styles.restored} role="status">
+          <p>Your version was saved as a new note, “{keptCopy.title}”. This note shows the latest version.</p>
+          <Link className={styles.textButton} to={`/notes/${keptCopy.id}`}>
+            Open your version
+          </Link>
+        </div>
+      )}
+
+      {restoredNotice && !view.conflict && (
         <div className={styles.restored} role="status">
           <p>
             Restored your unsaved changes from this computer ({editedLabel(restoredNotice.changedAt, new Date())}).
@@ -683,47 +877,31 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
         </div>
       )}
 
-      {held && (
-        <div className={styles.held} role="region" aria-label="Changes kept aside">
-          <div className={styles.heldRow}>
-            <p>
-              Unsaved changes from this computer ({editedLabel(held.changedAt, new Date())}) were kept aside, because
-              this note has since changed on another device. They have not been applied.
-            </p>
-            <button className={styles.textButton} type="button" onClick={() => setShowHeld((shown) => !shown)}>
-              {showHeld ? 'Hide them' : 'Show them'}
-            </button>
-            <button className={styles.textButton} type="button" onClick={deleteHeld}>
-              Delete them
-            </button>
-          </div>
-          {showHeld && (
-            <div className={styles.heldText}>
-              <p className={styles.heldTitle}>{held.title || 'Untitled'}</p>
-              <p className={styles.heldBody}>{noteText(held.content)}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {view.conflict && (
-        <div className={styles.conflict} role="alert">
-          <p>
-            This note was changed on another device since you opened it. Nothing was overwritten, and your changes
-            here are not being saved{keptHere ? ', but they are kept on this computer' : ''}. Copy anything you want to
-            keep, then reload the note.
-          </p>
-          <button className={styles.textButton} type="button" disabled={busy} onClick={() => void reloadNote()}>
-            Reload note
-          </button>
-        </div>
-      )}
       {problem && (
         <p className={form.error} role="alert">
           {problem}
         </p>
       )}
-      {archived && (
+
+      {view.conflict && resolving && (
+        <ConflictResolver
+          key={`${resolving.heldId}:${resolution.latest?.revision ?? 'loading'}`}
+          mine={resolving}
+          latest={resolution.latest}
+          loadError={resolution.loadError}
+          onRetryLoad={() => void loadLatest(resolving.noteId)}
+          contextName={contextName}
+          busy={resolution.busy}
+          error={resolution.error}
+          notice={resolution.notice}
+          waiting={resolution.queue.length - 1}
+          onKeepBoth={() => void keepBoth()}
+          onUseLatest={() => void chooseLatest()}
+          onUseMine={() => void chooseMine()}
+        />
+      )}
+
+      {archived && !view.conflict && (
         <div className={styles.archivedBanner}>
           <p>This note is archived. Restore it to edit.</p>
           <button className={styles.textButton} type="button" disabled={busy} onClick={() => void restore()}>
@@ -733,7 +911,8 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
         </div>
       )}
 
-      <div className={styles.page}>
+      {/* The editor stays in place during a conflict, hidden, so the version that stands can be shown at once. */}
+      <div className={styles.page} hidden={view.conflict}>
         <label className="visually-hidden" htmlFor={titleId}>
           Title
         </label>
@@ -743,11 +922,11 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
           placeholder="Untitled"
           maxLength={limits.noteTitle}
           value={title}
-          readOnly={archived}
+          readOnly={archived || view.conflict}
           autoFocus={isNew}
           onChange={(event) => editTitle(event.target.value)}
         />
-        {!archived && <FormatToolbar editor={editor} />}
+        {!archived && !view.conflict && <FormatToolbar editor={editor} />}
         <EditorContent editor={editor} className={styles.content} />
       </div>
     </div>

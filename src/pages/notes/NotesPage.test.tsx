@@ -419,14 +419,17 @@ describe('Revision conflicts', () => {
     await act(() => data.notes.save(note.id, { title: 'From the PC' }, 1))
 
     fireEvent.click(saveButton())
-    expect((await screen.findByRole('alert')).textContent).toContain('changed on another device')
+    const resolver = await screen.findByRole('region', { name: 'Resolve two versions' })
+    expect(within(resolver).getByRole('article', { name: 'Your version' }).textContent).toContain('From the laptop')
     expect(data.noteRows[0].title).toBe('From the PC')
-    expect(titleBox().value).toBe('From the laptop')
-    expect(saveButton().disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Save now' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reload note' }))
+    const useLatest = () => screen.getByRole('button', { name: 'Use latest version' }) as HTMLButtonElement
+    await waitFor(() => expect(useLatest().disabled).toBe(false))
+    fireEvent.click(useLatest())
+    fireEvent.click(screen.getByRole('button', { name: 'Discard my changes' }))
     await waitFor(() => expect(titleBox().value).toBe('From the PC'))
-    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Resolve two versions' })).toBeNull()
     expect(status()).not.toBe('Unsaved changes')
 
     fireEvent.change(titleBox(), { target: { value: 'From the laptop, again' } })
@@ -546,11 +549,11 @@ describe('Autosave', () => {
 
     fireEvent.change(titleBox(), { target: { value: 'From the laptop' } })
     await wait(2_100)
-    expect((await screen.findByRole('alert')).textContent).toContain('changed on another device')
-    expect(status()).toBe('Not saved: changed on another device. Your changes are kept on this computer.')
+    expect(await screen.findByRole('region', { name: 'Resolve two versions' })).toBeTruthy()
+    expect(status()).toBe('Not saved: two versions to choose from. Yours is kept on this computer.')
+    // While two versions wait for a decision, the note cannot be edited and nothing is retried.
+    expect(titleBox().readOnly).toBe(true)
     await wait(120_000)
-    fireEvent.change(titleBox(), { target: { value: 'From the laptop, still typing' } })
-    await wait(30_000)
     expect(save).toHaveBeenCalledTimes(1)
     expect(data.noteRows[0].title).toBe('From the PC')
   })

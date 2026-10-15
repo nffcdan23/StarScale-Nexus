@@ -54,13 +54,23 @@ describe('note drafts', () => {
     setItem.mockRestore()
   })
 
-  it('keeps a draft aside without losing it, then lists both kinds', () => {
+  it('keeps a version aside under its own id without losing it, then lists both kinds', () => {
     drafts.write(draft())
-    expect(drafts.hold(draft())).toBe(true)
+    const held = drafts.hold(draft(), 'held-1')
+    expect(held).toEqual(draft({ held: true, heldId: 'held-1' }))
     expect(drafts.read('owner-1', 'note-1')).toBeNull()
-    expect(drafts.read('owner-1', 'note-1', true)).toEqual(draft({ held: true }))
+    expect(drafts.readHeld('owner-1', 'note-1')).toEqual([held])
     drafts.write(draft({ changedAt: '2026-10-15T11:00:00.000Z' }))
     expect(drafts.list('owner-1').map((entry) => entry.held)).toEqual([false, true])
+  })
+
+  it('keeps every conflicting version, oldest first, and removes each one on its own', () => {
+    drafts.hold(draft({ changedAt: '2026-10-15T12:00:00.000Z' }), 'later')
+    drafts.hold(draft({ changedAt: '2026-10-15T10:00:00.000Z' }), 'earlier')
+    const held = drafts.readHeld('owner-1', 'note-1')
+    expect(held.map((entry) => entry.heldId)).toEqual(['earlier', 'later'])
+    drafts.removeHeld(held[0])
+    expect(drafts.readHeld('owner-1', 'note-1').map((entry) => entry.heldId)).toEqual(['later'])
   })
 
   it('does not remove the original if the held copy cannot be written', () => {
@@ -68,14 +78,39 @@ describe('note drafts', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('Quota exceeded', 'QuotaExceededError')
     })
-    expect(drafts.hold(draft())).toBe(false)
+    expect(drafts.hold(draft())).toBeNull()
     setItem.mockRestore()
     expect(drafts.read('owner-1', 'note-1')).toEqual(draft())
   })
 
+  it('does not remove a newer draft written meanwhile when holding an older one', () => {
+    drafts.write(draft({ changedAt: '2026-10-15T11:00:00.000Z', writer: 'tab-b' }))
+    drafts.hold(draft({ writer: 'tab-a' }), 'held-1')
+    expect(drafts.read('owner-1', 'note-1')?.writer).toBe('tab-b')
+  })
+
+  it('lets a tab remove only the draft it wrote itself', () => {
+    drafts.write(draft({ writer: 'tab-b' }))
+    drafts.remove('owner-1', 'note-1', 'tab-a')
+    expect(drafts.read('owner-1', 'note-1')).not.toBeNull()
+    drafts.remove('owner-1', 'note-1', 'tab-b')
+    expect(drafts.read('owner-1', 'note-1')).toBeNull()
+  })
+
+  it('reads a held version saved before Phase 3c-3 and refiles it under its own id', () => {
+    const legacy = { ...draft(), held: true }
+    localStorage.setItem('nexus.noteDraft.v1:owner-1:note-1:held', JSON.stringify(legacy))
+    const [found] = drafts.readHeld('owner-1', 'note-1')
+    expect(found).toEqual(legacy)
+    const refiled = drafts.hold(found, 'new-id')
+    expect(refiled?.heldId).toBe('new-id')
+    expect(localStorage.getItem('nexus.noteDraft.v1:owner-1:note-1:held')).toBeNull()
+    expect(drafts.readHeld('owner-1', 'note-1').map((entry) => entry.heldId)).toEqual(['new-id'])
+  })
+
   it('deletes all of an owner\'s drafts at sign-out and writes none until Notes opens again', () => {
     drafts.write(draft())
-    drafts.write(draft({ noteId: 'note-2', held: true }))
+    drafts.hold(draft({ noteId: 'note-2' }), 'held-2')
     drafts.write(draft({ ownerId: 'owner-2' }))
     drafts.deleteAllAndStop('owner-1')
     expect(drafts.list('owner-1')).toEqual([])

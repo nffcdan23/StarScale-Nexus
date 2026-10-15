@@ -235,12 +235,30 @@ plain English, define technical terms, and go one step at a time.
   computer". A copy is removed only after the database confirms the save,
   or by the owner's choice. On opening a note: a copy made on the version
   the database still has is restored (with a Discard option) and autosaved;
-  a copy made on an older version, or for an archived note, is kept aside
-  ("held") and never applied, with Show and Delete. New notes that never
+  a copy made on an older version, or for an archived note, becomes a held
+  version to resolve (3c-3) and is never applied automatically. New notes that never
   reached the database are listed under "Not saved yet" and recover with the
   same id. Damaged or other-account entries are ignored. Leaving or closing
   goes ahead quietly once the copy is safe; the 3b warnings remain when it
   cannot be made (private window, storage full), with a note in the editor.
+- Conflicts (3c-3, `ConflictResolver`, `conflicts.ts`): a save refused for
+  an older revision, or a held version found on opening, puts your version
+  aside as a held record with its own `heldId` (several per note allowed,
+  resolved oldest first), stops saving and editing that note, loads the
+  latest database version and shows both side by side (stacked under
+  1100 px), read-only through the editor. Keep both (default) creates your
+  version as a new note titled "<title> (my version, 15 Oct, 2:41 PM)" whose id
+  IS the heldId, so retries and restarts never make two; Use latest
+  version asks first; Use my version asks first, peeks the revision and
+  saves with that revision, stopping with the newer version shown if it
+  changed again. Use my version is not offered for archived notes (never
+  changed or restored automatically). A held record is removed only after
+  the database confirms (or after Use latest is confirmed). Identical
+  versions settle silently. Nexus keeps no older versions, so Use my version
+  says so. Each editing session tags its drafts with a `writer` id and only
+  removes its own; two tabs share one copy per note, so only the most
+  recent tab's unsaved changes are on disk at a time (the database still
+  never loses either version: the second save shows the conflict screen).
 - Signing out (`DesktopShell`) saves open notes first, then, if copies remain,
   asks: keep them on this computer and sign out (default), delete them and
   sign out (nothing writes them back while closing), or cancel. An ended
@@ -383,10 +401,12 @@ implement any of these until the owner asks.
   integration tests).
 - 3b-2 Notes workspace and editor: verified on the PC.
 - 3c-1 Autosave, retries, seamless first save, quiet refresh: verified on the PC.
-- 3c-2 Local drafts, recovery, kept-aside copies, sign-out choices: built on
-  the Mac 15 October 2026; awaiting PC verification (no database change).
-  Next: 3c-3 conflict screen (Keep both default, Use the other version, Use
-  mine; it also resolves copies kept aside). Needs its own go-ahead.
+- 3c-2 Local drafts, recovery, kept-aside copies, sign-out choices: verified
+  on the PC.
+- 3c-3 Conflict resolution (Keep both, Use latest version, Use my version):
+  built on the Mac 15 October 2026; awaiting PC verification (no database
+  change). Next: the desktop application milestone, only with the owner's
+  approval.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

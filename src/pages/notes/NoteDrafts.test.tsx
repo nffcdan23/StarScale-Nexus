@@ -154,43 +154,32 @@ describe('restoring after the browser closes', () => {
 })
 
 describe('older copies never overwrite newer versions', () => {
-  it('keeps a copy made on an older version aside, shows it on request, and never applies it', async () => {
+  it('opens a copy made on an older version as two versions to choose from, never applying it', async () => {
     const data = new FakeData()
     const note = data.addNote({ title: 'Plans', text: 'Original' })
     drafts.write({ ownerId: OWNER, noteId: note.id, isNew: false, baseRevision: 1, title: 'Old local edit', contextId: null, content: paragraphDoc('Local words'), changedAt: new Date().toISOString(), held: false })
     // Meanwhile another device saved a newer version.
     await data.notes.save(note.id, { title: 'Newer, from the PC' }, 1)
 
-    await open(data, `/notes/${note.id}`)
-    expect(titleBox().value).toBe('Newer, from the PC')
-    const aside = screen.getByRole('region', { name: 'Changes kept aside' })
-    expect(within(aside).getByText(/have not been applied/)).toBeTruthy()
+    renderApp(`/notes/${note.id}`, signedInOwner(), data)
+    const resolver = await screen.findByRole('region', { name: 'Resolve two versions' })
+    expect(within(within(resolver).getByRole('article', { name: 'Your version' })).getByText('Old local edit')).toBeTruthy()
+    expect(within(resolver).getByRole('article', { name: 'Latest version' }).textContent).toContain('Newer, from the PC')
     expect(drafts.read(OWNER, note.id)).toBeNull()
-    expect(drafts.read(OWNER, note.id, true)?.title).toBe('Old local edit')
-    expect(await screen.findByText('Unsaved changes kept aside')).toBeTruthy()
-
-    fireEvent.click(within(aside).getByRole('button', { name: 'Show them' }))
-    expect(within(aside).getByText('Local words')).toBeTruthy()
-
-    // Editing the newer version never touches the copy kept aside.
-    fireEvent.change(titleBox(), { target: { value: 'Newer, edited here' } })
-    saveNow()
-    await waitFor(() => expect(data.noteRows[0].title).toBe('Newer, edited here'))
-    expect(drafts.read(OWNER, note.id, true)?.title).toBe('Old local edit')
-
-    fireEvent.click(within(aside).getByRole('button', { name: 'Delete them' }))
-    expect(drafts.read(OWNER, note.id, true)).toBeNull()
-    expect(screen.queryByRole('region', { name: 'Changes kept aside' })).toBeNull()
+    expect(drafts.readHeld(OWNER, note.id).map((held) => held.title)).toEqual(['Old local edit'])
+    expect(await screen.findByText('Two versions to resolve')).toBeTruthy()
+    expect(data.noteRows[0].title).toBe('Newer, from the PC')
   })
 
-  it('keeps aside a copy for a note that has since been archived', async () => {
+  it('treats a copy for a note since archived the same way, without offering to overwrite it', async () => {
     const data = new FakeData()
     const note = data.addNote({ title: 'Plans' })
     drafts.write({ ownerId: OWNER, noteId: note.id, isNew: false, baseRevision: 1, title: 'Local edit', contextId: null, content: paragraphDoc('x'), changedAt: new Date().toISOString(), held: false })
     await data.notes.setArchived(note.id, true)
-    await open(data, `/notes/${note.id}`)
-    expect(titleBox().value).toBe('Plans')
-    expect(screen.getByRole('region', { name: 'Changes kept aside' })).toBeTruthy()
+    renderApp(`/notes/${note.id}`, signedInOwner(), data)
+    const resolver = await screen.findByRole('region', { name: 'Resolve two versions' })
+    expect(within(resolver).getByText(/ · Archived/)).toBeTruthy()
+    expect((within(resolver).getByRole('button', { name: 'Use my version' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

@@ -1,0 +1,172 @@
+/* Two versions of a note side by side, in the Nexus glass style. */
+
+.resolver {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.heading {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.intro {
+  max-width: 72ch;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.notice {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: var(--radius-md);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fde68a;
+  font-size: var(--text-sm);
+}
+
+.versions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.version {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.versionHeading {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.meta {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* Long notes scroll inside their own box. */
+.body {
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 0.94rem;
+}
+
+.body :global(.ProseMirror) {
+  min-height: 0;
+}
+
+.loadProblem {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.choice {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.explain {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.primary,
+.secondary,
+.danger {
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.primary {
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-ink-950);
+  font-weight: var(--weight-semibold);
+}
+
+.secondary {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: none;
+  color: var(--text-primary);
+}
+
+.danger {
+  border: none;
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.danger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.confirm {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: var(--radius-md);
+  background: rgba(251, 191, 36, 0.08);
+  color: #fde68a;
+  font-size: var(--text-sm);
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Narrow screens: the two versions and the choices stack. */
+@media (max-width: 1100px) {
+  .versions,
+  .choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

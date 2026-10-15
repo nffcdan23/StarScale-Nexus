@@ -284,6 +284,11 @@
   padding: var(--space-4) var(--space-2) var(--space-12);
 }
 
+/* Hidden while two versions wait for a decision (the layout rule above would otherwise show it). */
+.page[hidden] {
+  display: none;
+}
+
 .title {
   width: 100%;
   padding: 0;

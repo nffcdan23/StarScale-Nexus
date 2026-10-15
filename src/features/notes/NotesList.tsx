@@ -60,7 +60,7 @@ export function NotesList({ view, onViewChange, notes, error, onRetry, contexts,
           {contextName(note.contextId)} · {editedLabel(view === 'archived' ? (note.archivedAt ?? note.updatedAt) : note.updatedAt, now)}
         </span>
         {draftFor(note.id) && <span className={styles.draftBadge}>Unsaved changes on this computer</span>}
-        {heldFor(note.id) && <span className={styles.draftBadge}>Unsaved changes kept aside</span>}
+        {heldFor(note.id) && <span className={styles.draftBadge}>Two versions to resolve</span>}
       </NavLink>
     </li>
   )

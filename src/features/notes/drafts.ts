@@ -8,8 +8,8 @@ import { limits, type NoteDoc } from '../../data/types'
 //   - a write counts only once it has been read back unchanged;
 //   - a draft is removed only after the database confirms the save, or when
 //     the owner chooses to discard it;
-//   - a draft based on an older revision than the database holds is kept
-//     aside ("held"), never applied automatically.
+//   - a version that conflicts with the database ("held") is never applied
+//     automatically: the owner resolves it (Phase 3c-3).
 // Drafts are plain text in this browser profile, like the signed-in session
 // itself. They are never sent anywhere except as normal saves.
 
@@ -26,12 +26,25 @@ export interface NoteDraft {
   content: NoteDoc
   /** When the latest change was made. */
   changedAt: string
-  /** Kept aside because the database has a newer version; never applied automatically. */
+  /** A version that conflicts with the database: kept until the owner resolves it. */
   held: boolean
+  /**
+   * For held versions: this record's own id. It is also the id "Keep both"
+   * gives the copy, so retrying can never create a second copy. Missing only
+   * on held versions written before Phase 3c-3.
+   */
+  heldId?: string
+  /** The editing session that wrote it; a session removes only its own drafts. */
+  writer?: string
 }
 
 const PREFIX = 'nexus.noteDraft.v1:'
-const keyFor = (ownerId: string, noteId: string, held: boolean) => `${PREFIX}${ownerId}:${noteId}${held ? ':held' : ''}`
+
+/** Storage key: owner, note, and for held versions ":held:<heldId>" (":held" before Phase 3c-3). */
+function keyFor(draft: Pick<NoteDraft, 'ownerId' | 'noteId' | 'held' | 'heldId'>) {
+  const suffix = draft.held ? (draft.heldId ? `:held:${draft.heldId}` : ':held') : ''
+  return `${PREFIX}${draft.ownerId}:${draft.noteId}${suffix}`
+}
 
 function storage(): Storage | null {
   try {
@@ -41,15 +54,17 @@ function storage(): Storage | null {
   }
 }
 
-/** Reads a stored draft, or null if it is missing, damaged or not this owner's. */
-function parse(raw: string | null, ownerId: string, noteId: string, held: boolean): NoteDraft | null {
+/** Reads a stored draft, or null if it is damaged or does not match where it is filed. */
+function parse(raw: string | null, expected: Pick<NoteDraft, 'ownerId' | 'noteId' | 'held' | 'heldId'>): NoteDraft | null {
   if (!raw) return null
   try {
     const draft = JSON.parse(raw) as Partial<NoteDraft>
     const valid =
-      draft.ownerId === ownerId &&
-      draft.noteId === noteId &&
-      draft.held === held &&
+      draft.ownerId === expected.ownerId &&
+      draft.noteId === expected.noteId &&
+      draft.held === expected.held &&
+      (draft.heldId ?? undefined) === expected.heldId &&
+      (draft.writer === undefined || typeof draft.writer === 'string') &&
       typeof draft.isNew === 'boolean' &&
       Number.isInteger(draft.baseRevision) &&
       (draft.baseRevision ?? -1) >= 0 &&
@@ -64,6 +79,15 @@ function parse(raw: string | null, ownerId: string, noteId: string, held: boolea
   } catch {
     return null
   }
+}
+
+/** Works out what a stored key refers to, for this owner. */
+function describeKey(key: string, ownerId: string) {
+  const prefix = `${PREFIX}${ownerId}:`
+  if (!key.startsWith(prefix)) return null
+  const [noteId, marker, heldId] = key.slice(prefix.length).split(':')
+  if (!noteId || (marker !== undefined && marker !== 'held')) return null
+  return { ownerId, noteId, held: marker === 'held', heldId: heldId || undefined }
 }
 
 // Screens showing drafts redraw when they change, in this tab or another.
@@ -89,6 +113,8 @@ function subscribe(listener: () => void) {
 // write them back while the screen closes. Lifted when Notes opens again.
 const stopped = new Set<string>()
 
+const sameDraft = (a: NoteDraft, b: NoteDraft) => a.changedAt === b.changedAt && a.writer === b.writer
+
 export const drafts = {
   /** Whether drafts can be kept in this browser at all (not in some private windows, or when full). */
   available(): boolean {
@@ -108,8 +134,8 @@ export const drafts = {
   /** Stores a draft. True only if it was written and read back unchanged. */
   write(draft: NoteDraft): boolean {
     const store = storage()
-    if (!store || stopped.has(draft.ownerId)) return false
-    const key = keyFor(draft.ownerId, draft.noteId, draft.held)
+    if (!store || stopped.has(draft.ownerId) || (draft.held && !draft.heldId)) return false
+    const key = keyFor(draft)
     const text = JSON.stringify(draft)
     try {
       store.setItem(key, text)
@@ -121,14 +147,21 @@ export const drafts = {
     }
   },
 
-  read(ownerId: string, noteId: string, held = false): NoteDraft | null {
-    const store = storage()
-    if (!store) return null
+  /** The note's current (not held) draft. */
+  read(ownerId: string, noteId: string): NoteDraft | null {
     try {
-      return parse(store.getItem(keyFor(ownerId, noteId, held)), ownerId, noteId, held)
+      const expected = { ownerId, noteId, held: false }
+      return parse(storage()?.getItem(keyFor(expected)) ?? null, expected)
     } catch {
       return null
     }
+  },
+
+  /** The note's held versions, oldest first. */
+  readHeld(ownerId: string, noteId: string): NoteDraft[] {
+    return this.list(ownerId)
+      .filter((draft) => draft.held && draft.noteId === noteId)
+      .sort((a, b) => a.changedAt.localeCompare(b.changedAt))
   },
 
   /** This owner's drafts, held ones included, most recent change first. */
@@ -137,14 +170,11 @@ export const drafts = {
     if (!store) return []
     const found: NoteDraft[] = []
     try {
-      const prefix = `${PREFIX}${ownerId}:`
       for (let index = 0; index < store.length; index += 1) {
         const key = store.key(index)
-        if (!key?.startsWith(prefix)) continue
-        const rest = key.slice(prefix.length)
-        const held = rest.endsWith(':held')
-        const noteId = held ? rest.slice(0, -':held'.length) : rest
-        const draft = parse(store.getItem(key), ownerId, noteId, held)
+        const where = key ? describeKey(key, ownerId) : null
+        if (!key || !where) continue
+        const draft = parse(store.getItem(key), where)
         if (draft) found.push(draft)
       }
     } catch {
@@ -153,30 +183,58 @@ export const drafts = {
     return found.sort((a, b) => b.changedAt.localeCompare(a.changedAt))
   },
 
-  /** Removes a draft: only after a confirmed save, or by the owner's choice. */
-  remove(ownerId: string, noteId: string, held = false) {
+  /**
+   * Removes the note's current draft: only after the database confirms a
+   * save, or by the owner's choice. Given a writer, it removes the draft only
+   * if that session wrote it, so one tab never deletes another tab's work.
+   */
+  remove(ownerId: string, noteId: string, writer?: string) {
+    const stored = this.read(ownerId, noteId)
+    if (writer !== undefined && stored && stored.writer !== undefined && stored.writer !== writer) return
     try {
-      storage()?.removeItem(keyFor(ownerId, noteId, held))
+      storage()?.removeItem(keyFor({ ownerId, noteId, held: false }))
     } catch {
       // Nothing more can be done; the draft stays.
     }
     changed()
   },
 
+  /** Removes one held version: only once it is resolved (or deleted by the owner's choice). */
+  removeHeld(draft: NoteDraft) {
+    try {
+      storage()?.removeItem(keyFor(draft))
+    } catch {
+      // Nothing more can be done; it stays.
+    }
+    changed()
+  },
+
   /**
-   * Keeps a draft aside because the database has a newer version. The
-   * original is removed only once the held copy is safely written.
+   * Keeps a version aside as held, under its own id. The current draft it
+   * came from is removed only once the held copy is safely written, and only
+   * if no newer draft has replaced it meanwhile. Returns the held version,
+   * or null if it could not be written (the original then stays).
    */
-  hold(draft: NoteDraft): boolean {
-    const ok = this.write({ ...draft, held: true })
-    if (ok) this.remove(draft.ownerId, draft.noteId)
-    return ok
+  hold(draft: NoteDraft, heldId: string = draft.heldId ?? crypto.randomUUID()): NoteDraft | null {
+    const held: NoteDraft = { ...draft, held: true, heldId }
+    if (!this.write(held)) return null
+    if (!draft.held) {
+      const current = this.read(draft.ownerId, draft.noteId)
+      if (current && sameDraft(current, draft)) this.remove(draft.ownerId, draft.noteId)
+    } else if (!draft.heldId) {
+      // A held version from before Phase 3c-3: now filed under its own id.
+      this.removeHeld(draft)
+    }
+    return held
   },
 
   /** Deletes all of this owner's drafts and stops new ones being written (sign-out choice). */
   deleteAllAndStop(ownerId: string) {
     stopped.add(ownerId)
-    for (const draft of this.list(ownerId)) this.remove(ownerId, draft.noteId, draft.held)
+    for (const draft of this.list(ownerId)) {
+      if (draft.held) this.removeHeld(draft)
+      else this.remove(ownerId, draft.noteId)
+    }
   },
 
   /** Lets drafts be written again for this owner (Notes opened after signing in). */

@@ -30,7 +30,8 @@ export const fakeNoteText = noteText
 /** A one-paragraph note document, for tests. */
 export const paragraphDoc = (text: string): NoteDoc => ({
   type: 'doc',
-  content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+  // The editor never stores an empty text node; an empty note is an empty paragraph.
+  content: [text ? { type: 'paragraph', content: [{ type: 'text', text }] } : { type: 'paragraph' }],
 })
 
 let clock = Date.parse('2026-10-14T09:00:00Z')
