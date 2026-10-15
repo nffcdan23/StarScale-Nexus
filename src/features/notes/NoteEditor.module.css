@@ -187,6 +187,8 @@
 /* Messages above the note */
 .confirm,
 .conflict,
+.restored,
+.heldRow,
 .archivedBanner {
   display: flex;
   flex-wrap: wrap;
@@ -206,6 +208,8 @@
 
 .confirm p,
 .conflict p,
+.restored p,
+.heldRow p,
 .archivedBanner p {
   flex: 1;
   min-width: 220px;
@@ -215,6 +219,53 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* Unsaved changes found on this computer */
+.restored {
+  border: 1px solid rgba(160, 196, 255, 0.28);
+  background: var(--color-accent-wash);
+  color: var(--text-primary);
+}
+
+.held {
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: var(--radius-md);
+  background: rgba(251, 191, 36, 0.08);
+  color: #fde68a;
+}
+
+.heldRow {
+  padding: var(--space-3) var(--space-4);
+}
+
+.heldText {
+  display: grid;
+  gap: var(--space-1);
+  max-height: 240px;
+  margin: 0 var(--space-4) var(--space-3);
+  padding: var(--space-3);
+  overflow-y: auto;
+  border-radius: var(--radius-sm);
+  background: rgba(5, 8, 20, 0.45);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  user-select: text;
+}
+
+.heldTitle {
+  font-weight: var(--weight-semibold);
+}
+
+.heldBody {
+  white-space: pre-wrap;
+}
+
+.storageNote {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .archivedBanner {

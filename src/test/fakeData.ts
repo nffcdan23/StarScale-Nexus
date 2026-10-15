@@ -12,6 +12,7 @@ import {
   type TaskView,
 } from '../data/types'
 import { localDateString } from '../lib/deadlines'
+import { noteText } from '../lib/noteText'
 
 // An in-memory stand-in for the database, so the screens can be tested on a
 // machine with no Supabase. It copies only the behaviour the screens rely on.
@@ -23,16 +24,8 @@ const priorityRank: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
 const deadlineDay = (task: Task) =>
   !task.deadline ? null : task.deadline.kind === 'date' ? task.deadline.date : localDateString(new Date(task.deadline.at))
 
-/** The same rule as the database's private.note_text: text nodes, with line breaks between blocks. */
-export function fakeNoteText(node: unknown): string {
-  if (typeof node !== 'object' || node === null) return ''
-  const { type, text, content } = node as { type?: string; text?: string; content?: unknown }
-  if (type === 'text') return text ?? ''
-  if (type === 'hardBreak') return '\n'
-  if (!Array.isArray(content)) return ''
-  const inline = content.every((child) => ['text', 'hardBreak'].includes((child as { type?: string })?.type ?? ''))
-  return content.map(fakeNoteText).join(inline ? '' : '\n')
-}
+/** The same rule as the database's private.note_text. */
+export const fakeNoteText = noteText
 
 /** A one-paragraph note document, for tests. */
 export const paragraphDoc = (text: string): NoteDoc => ({

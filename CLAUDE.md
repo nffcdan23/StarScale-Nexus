@@ -226,10 +226,27 @@ plain English, define technical terms, and go one step at a time.
   `/notes/new` to `/notes/<id>` (`editorSession` in the navigation state).
 - While nothing is unsaved, an open note checks `notes.peek` (revision,
   pinned, archived; never content) every 30 s and when the tab is shown, and
-  loads a newer version quietly. Leaving with unsaved changes saves first and
-  asks only if that save fails; the browser still warns on closing until
-  local drafts arrive in 3c-2. Status messages never claim changes are kept
-  on this computer: they are not, until 3c-2.
+  loads a newer version quietly.
+- Local drafts (3c-2, `src/features/notes/drafts.ts`): unsaved changes are
+  copied to localStorage 0.3 s after each edit and at once when the tab is
+  hidden, the page closes or the editor closes. Key: account id (from the
+  sign-in snapshot's `userId`) plus the note's stable id. A copy counts only
+  once read back unchanged; only then may the status say "kept on this
+  computer". A copy is removed only after the database confirms the save,
+  or by the owner's choice. On opening a note: a copy made on the version
+  the database still has is restored (with a Discard option) and autosaved;
+  a copy made on an older version, or for an archived note, is kept aside
+  ("held") and never applied, with Show and Delete. New notes that never
+  reached the database are listed under "Not saved yet" and recover with the
+  same id. Damaged or other-account entries are ignored. Leaving or closing
+  goes ahead quietly once the copy is safe; the 3b warnings remain when it
+  cannot be made (private window, storage full), with a note in the editor.
+- Signing out (`DesktopShell`) saves open notes first, then, if copies remain,
+  asks: keep them on this computer and sign out (default), delete them and
+  sign out (nothing writes them back while closing), or cancel. An ended
+  session keeps them. Copies are plain text in that browser profile:
+  readable by anyone using that Windows account and browser, like the
+  signed-in session; not encrypted, since the key would sit beside them.
 - The editor shows the stored document through ProseMirror; no stored text
   is ever inserted as HTML. Typing shortcuts (# heading, - list, 1. list,
   [ ] checklist, > quote, three backticks then a space for code, --- divider, **bold**) come with TipTap.
@@ -365,11 +382,11 @@ implement any of these until the owner asks.
   configured: verified on the PC 15 October 2026 (105 of 105 real checks, 17
   integration tests).
 - 3b-2 Notes workspace and editor: verified on the PC.
-- 3c-1 Autosave, retries, seamless first save, quiet refresh: built on the
-  Mac 15 October 2026; awaiting PC verification (no database change). Next:
-  3c-2 local drafts (approved: localStorage, owner-only, stable note id,
-  deleted only after a confirmed save), then 3c-3 conflict screen (Keep both
-  default, Use the other version, Use mine). Each needs its own go-ahead.
+- 3c-1 Autosave, retries, seamless first save, quiet refresh: verified on the PC.
+- 3c-2 Local drafts, recovery, kept-aside copies, sign-out choices: built on
+  the Mac 15 October 2026; awaiting PC verification (no database change).
+  Next: 3c-3 conflict screen (Keep both default, Use the other version, Use
+  mine; it also resolves copies kept aside). Needs its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
@@ -378,6 +395,33 @@ implement any of these until the owner asks.
   daily use before anything further.
 - 6 and 7 Built-in assistant. Then calendar, Derwent and Veyra health, daily
   briefing, notes, connectors, approvals and Gmail suggestions.
+- Later vision, not scheduled: Nexus Voice & Ambient Intelligence (below).
+
+## Future vision: Nexus Voice & Ambient Intelligence
+
+Recorded 15 October 2026 at the owner's request. Documentation only: do not
+build any of it, or any listening feature, until the owner approves a phase.
+
+The long-term goal is a voice-enabled personal AI operating system:
+
+1. Native voice dictation within Notes.
+2. Natural spoken conversations with the Nexus AI assistant.
+3. Optional wake-word activation and spoken daily briefings.
+4. A dedicated Raspberry Pi or similar room device with microphone and
+   speaker.
+5. Future Omi wearable integration for capturing useful thoughts and
+   conversations, subject to privacy and consent requirements.
+6. AI extraction of useful notes, ideas and tasks from authorised recordings.
+7. Selective retention: private or irrelevant material discarded, with clear
+   controls for reviewing and deleting anything stored.
+8. AI organisation of captured notes into the relevant projects through the
+   planned Smart Inbox.
+
+Privacy is part of the architecture from the start, not added later. AI
+classification can never guarantee that sensitive material is not retained,
+so the design must not rely on it: consent, capture limits, review before
+anything is kept, and easy deletion come first. Other people recorded in
+conversations have their own consent and legal rights to respect.
 
 ## Open questions
 

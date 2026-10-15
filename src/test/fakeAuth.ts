@@ -35,7 +35,7 @@ export class FakeAuthService implements AuthService {
   }
 
   async current(): Promise<AuthSnapshot> {
-    if (!this.current_) return { status: 'signed-out', email: null }
+    if (!this.current_) return { status: 'signed-out', email: null, userId: null }
     const { account, level } = this.current_
     return {
       status: statusFor({
@@ -44,6 +44,8 @@ export class FakeAuthService implements AuthService {
         nextLevel: account.hasAuthenticator ? 'aal2' : 'aal1',
       }),
       email: account.email,
+      // A stable made-up id per account.
+      userId: `fake-${account.email}`,
     }
   }
 

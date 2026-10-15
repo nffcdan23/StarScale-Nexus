@@ -19,6 +19,13 @@ async function openNote(data: FakeData, id: string) {
   return view
 }
 
+/** Makes browser storage refuse every write, as when it is full or blocked. */
+function storageFull() {
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Quota exceeded', 'QuotaExceededError')
+  })
+}
+
 /** Selects all of the note's text, as Ctrl+A does. */
 function selectAllText() {
   const text = noteText()
@@ -338,11 +345,12 @@ describe('Unsaved changes', () => {
     expect(data.noteRows.find((note) => note.id === first.id)?.title).toBe('First, edited')
   })
 
-  it('asks before leaving only when the changes cannot be saved', async () => {
+  it('asks before leaving only when the changes can be neither saved nor kept on this computer', async () => {
     const data = new FakeData()
     const first = data.addNote({ title: 'First' })
     data.addNote({ title: 'Second' })
     data.failWrites = new DataError('offline', 'Could not save the note: Nexus cannot reach the database. Nothing was changed.')
+    storageFull()
     const { router } = await openNote(data, first.id)
     fireEvent.change(titleBox(), { target: { value: 'First, edited' } })
 
@@ -370,10 +378,24 @@ describe('Unsaved changes', () => {
     expect(data.noteRows[0].title).toBe('Plans, edited')
   })
 
-  it('makes the browser warn before closing the tab with unsaved changes', async () => {
+  it('lets the tab close without a warning once unsaved changes are kept on this computer', async () => {
     const data = new FakeData()
     const note = data.addNote({ title: 'Plans' })
     await openNote(data, note.id)
+    fireEvent.change(titleBox(), { target: { value: 'Changed' } })
+    const closing = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(closing)
+    expect(closing.defaultPrevented).toBe(false)
+    // The copy was made at that moment.
+    expect(localStorage.length).toBe(1)
+  })
+
+  it('makes the browser warn before closing when unsaved changes cannot be kept on this computer', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    storageFull()
+    await openNote(data, note.id)
+    expect(screen.getByText(/This browser is not keeping copies of unsaved changes/)).toBeTruthy()
 
     const clean = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(clean)
@@ -525,7 +547,7 @@ describe('Autosave', () => {
     fireEvent.change(titleBox(), { target: { value: 'From the laptop' } })
     await wait(2_100)
     expect((await screen.findByRole('alert')).textContent).toContain('changed on another device')
-    expect(status()).toBe('Not saved: changed on another device')
+    expect(status()).toBe('Not saved: changed on another device. Your changes are kept on this computer.')
     await wait(120_000)
     fireEvent.change(titleBox(), { target: { value: 'From the laptop, still typing' } })
     await wait(30_000)

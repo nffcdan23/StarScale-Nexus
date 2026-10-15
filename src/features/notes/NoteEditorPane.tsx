@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/core'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Archive, ArchiveRestore, ArrowLeft, Pin } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
@@ -9,6 +10,8 @@ import form from '../../components/Form/Form.module.css'
 import { DataError, limits, type Context, type Note, type NoteChanges, type NoteDoc } from '../../data/types'
 import { cx } from '../../lib/cx'
 import { londonClock } from '../../lib/dashboard'
+import { noteText } from '../../lib/noteText'
+import { drafts, registerOpenNote, type NoteDraft } from './drafts'
 import { createNoteExtensions } from './editor/extensions'
 import { FormatToolbar } from './editor/FormatToolbar'
 import { editedLabel } from './noteTime'
@@ -17,6 +20,9 @@ import { useUnsavedChangesGuard } from './useUnsavedChangesGuard'
 import styles from './NoteEditor.module.css'
 
 const emptyDoc: NoteDoc = { type: 'doc', content: [] }
+
+/** Wait after an edit before keeping a copy on this computer (also kept at once on leaving or closing). */
+const DRAFT_DELAY = 300
 
 interface NoteEditorPaneProps {
   /** Null for a new note that has not been saved yet. */
@@ -28,28 +34,59 @@ interface NoteEditorPaneProps {
   onChanged: () => void
 }
 
+/** What the editor opens with, decided once when the note is loaded. */
+interface Opening {
+  note: Note | null
+  /** The id a new note will be created with. */
+  newNoteId: string
+  /** Unsaved changes from this computer, safe to apply on top of note. */
+  restored: NoteDraft | null
+  /** Unsaved changes kept aside because the database has a newer version. */
+  held: NoteDraft | null
+}
+
 /**
- * Loads one note (or starts a new one) and shows it in the editor. The note
- * is loaded once: when a new note's first save gives it an address, the same
- * editor carries on.
+ * Loads one note (or starts a new one), checks this computer for unsaved
+ * changes to it, and shows it in the editor. Loaded once: when a new note's
+ * first save gives it an address, the same editor carries on.
  */
 export function NoteEditorPane({ noteId, editorSession, contexts, onChanged }: NoteEditorPaneProps) {
   const { notes } = useData()
-  const { actions } = useAuth()
+  const { state, actions } = useAuth()
+  const ownerId = state.phase === 'ready' && state.snapshot.status === 'owner' ? state.snapshot.userId : null
   const [initialId] = useState(noteId)
-  const [loaded, setLoaded] = useState<Note | null>(null)
+  const [opening, setOpening] = useState<Opening | null>(() =>
+    initialId ? null : { note: null, newNoteId: crypto.randomUUID(), restored: null, held: null },
+  )
   const [failure, setFailure] = useState<DataError | null>(null)
 
   useEffect(() => {
     if (!initialId) return
     let active = true
+    const draft = ownerId ? drafts.read(ownerId, initialId) : null
+    const heldBefore = ownerId ? drafts.read(ownerId, initialId, true) : null
     notes.get(initialId).then(
       (note) => {
-        if (active) setLoaded(note)
+        if (!active) return
+        let restored: NoteDraft | null = null
+        let held = heldBefore
+        if (draft) {
+          // Safe to apply only if made on the version the database still has
+          // (or, for a note this computer created, on that first version).
+          const sameVersion = draft.baseRevision === note.revision || (draft.isNew && note.revision === 1)
+          if (sameVersion && !note.archivedAt) restored = draft
+          else held = drafts.hold(draft) ? { ...draft, held: true } : draft
+        }
+        setOpening({ note, newNoteId: initialId, restored, held })
       },
       (error: unknown) => {
         if (!active) return
         const problem = error instanceof DataError ? error : new DataError('unknown', String(error))
+        // A note created on this computer that never reached the database.
+        if (problem.kind === 'missing' && draft?.isNew) {
+          setOpening({ note: null, newNoteId: initialId, restored: draft, held: null })
+          return
+        }
         if (problem.kind === 'refused') void actions.recheck()
         setFailure(problem)
       },
@@ -57,7 +94,7 @@ export function NoteEditorPane({ noteId, editorSession, contexts, onChanged }: N
     return () => {
       active = false
     }
-  }, [initialId, notes, actions])
+  }, [initialId, notes, actions, ownerId])
 
   if (failure) {
     return (
@@ -72,13 +109,22 @@ export function NoteEditorPane({ noteId, editorSession, contexts, onChanged }: N
       </div>
     )
   }
-  if (initialId && !loaded) return <p className={styles.loading}>Opening note…</p>
+  if (!opening) return <p className={styles.loading}>Opening note…</p>
 
-  return <NoteEditor note={loaded} editorSession={editorSession} contexts={contexts} onChanged={onChanged} />
+  return (
+    <NoteEditor
+      opening={opening}
+      ownerId={ownerId}
+      editorSession={editorSession}
+      contexts={contexts}
+      onChanged={onChanged}
+    />
+  )
 }
 
 interface NoteEditorProps {
-  note: Note | null
+  opening: Opening
+  ownerId: string | null
   editorSession: string
   contexts: Context[]
   onChanged: () => void
@@ -116,6 +162,8 @@ interface Live {
   savedContentVersion: number
   /** Raised by every edit of any kind. */
   edits: number
+  /** The edit count last kept on this computer and read back (-1: none). */
+  draftedEdits: number
   conflict: boolean
 }
 
@@ -134,23 +182,26 @@ type Phase =
   | { kind: 'refreshed'; at: Date }
   | { kind: 'failed'; reason: DataError['kind']; message: string }
 
-function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProps) {
+function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: NoteEditorProps) {
   const { notes } = useData()
   const { actions } = useAuth()
   const navigate = useNavigate()
   const titleId = useId()
-  // A new note's id is fixed now, so a retried first save can never create a second note.
-  const [newNoteId] = useState(() => crypto.randomUUID())
+  const { note, restored, newNoteId } = opening
+  // Whether this browser can keep copies of unsaved changes at all.
+  const [storageOk] = useState(() => Boolean(ownerId) && drafts.available())
 
   // view draws the screen; live holds the same values for saving, updated
-  // the moment anything changes. sync() copies live into view.
+  // the moment anything changes. sync() copies live into view. Restored
+  // changes start as one unsaved edit, already kept on this computer.
   const [view, setView] = useState<Live>(() => ({
     saved: savedFrom(note),
-    title: note?.title ?? '',
-    contextId: note?.contextId ?? null,
-    contentVersion: 0,
+    title: restored?.title ?? note?.title ?? '',
+    contextId: restored ? restored.contextId : (note?.contextId ?? null),
+    contentVersion: restored ? 1 : 0,
     savedContentVersion: 0,
-    edits: 0,
+    edits: restored ? 1 : 0,
+    draftedEdits: restored ? 1 : -1,
     conflict: false,
   }))
   const live = useRef<Live>({ ...view })
@@ -160,18 +211,28 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [leaveFailed, setLeaveFailed] = useState(false)
+  const [restoredNotice, setRestoredNotice] = useState<NoteDraft | null>(restored)
+  const [held, setHeld] = useState<NoteDraft | null>(opening.held)
+  const [showHeld, setShowHeld] = useState(false)
 
   const { saved, title, contextId } = view
   const archived = Boolean(saved.archivedAt)
   const isNew = saved.id === null
   const dirty = unsaved(view)
+  const keptHere = dirty && view.draftedEdits === view.edits
 
+  // The latest document, kept so a copy can still be made while the editor closes.
+  const latestDoc = useRef<ProseMirrorNode | null>(null)
   const editor = useEditor({
     extensions: createNoteExtensions(),
-    content: (note?.content ?? emptyDoc) as JSONContent,
+    content: (restored?.content ?? note?.content ?? emptyDoc) as JSONContent,
     editable: !archived,
     editorProps: { attributes: { 'aria-label': 'Note text', class: styles.prose } },
-    onUpdate: () => {
+    onCreate: ({ editor: created }) => {
+      latestDoc.current = created.state.doc
+    },
+    onUpdate: ({ editor: updated }) => {
+      latestDoc.current = updated.state.doc
       live.current.contentVersion += 1
       live.current.edits += 1
       sync()
@@ -194,7 +255,58 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
     sync()
   }
 
-  const { blocker, allowNextNavigation } = useUnsavedChangesGuard(dirty)
+  /**
+   * Keeps the unsaved changes on this computer. True if they are safely
+   * kept (or nothing needs keeping); false if they could not be.
+   */
+  const keepDraft = useCallback((): boolean => {
+    const current = live.current
+    if (!unsaved(current)) return true
+    if (current.draftedEdits === current.edits) return true
+    if (!ownerId || !latestDoc.current) return false
+    const ok = drafts.write({
+      ownerId,
+      noteId: current.saved.id ?? newNoteId,
+      isNew: current.saved.id === null,
+      baseRevision: current.saved.revision,
+      title: current.title,
+      contextId: current.contextId,
+      content: latestDoc.current.toJSON() as NoteDoc,
+      changedAt: new Date().toISOString(),
+      held: false,
+    })
+    current.draftedEdits = ok ? current.edits : -1
+    sync()
+    return ok
+  }, [ownerId, newNoteId, sync])
+
+  // A copy shortly after each edit, and at once when the tab is hidden or the page closes.
+  useEffect(() => {
+    if (view.edits === 0) return
+    const timer = setTimeout(() => keepDraft(), DRAFT_DELAY)
+    return () => clearTimeout(timer)
+  }, [view.edits, keepDraft])
+
+  const keepDraftNow = useRef(keepDraft)
+  useEffect(() => {
+    keepDraftNow.current = keepDraft
+  }, [keepDraft])
+  useEffect(() => {
+    const keep = () => keepDraftNow.current()
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') keep()
+    }
+    window.addEventListener('pagehide', keep)
+    document.addEventListener('visibilitychange', onHidden)
+    return () => {
+      window.removeEventListener('pagehide', keep)
+      document.removeEventListener('visibilitychange', onHidden)
+      // Closing the editor (another page, signing out, an ended session): keep what is unsaved.
+      keep()
+    }
+  }, [])
+
+  const { blocker, allowNextNavigation } = useUnsavedChangesGuard(dirty, keepDraft)
 
   /** One save attempt with the latest edits; autosave decides when. */
   const saveOnce = useCallback(async (): Promise<SaveOutcome> => {
@@ -224,8 +336,17 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
       // Only what was sent counts as saved; anything typed since stays unsaved.
       live.current.saved = savedFrom(result)
       live.current.savedContentVersion = version
+      if (!unsaved(live.current)) {
+        // The database has confirmed everything: only now is the local copy removed.
+        if (ownerId) drafts.remove(ownerId, result.id)
+      } else {
+        // Still unsaved edits: keep them again, now based on the new revision.
+        live.current.draftedEdits = -1
+        keepDraft()
+      }
       sync()
       setPhase({ kind: 'saved', at: new Date() })
+      setRestoredNotice(null)
       onChanged()
       if (base.id === null) {
         // Give the new note its address without leaving this editor.
@@ -250,13 +371,23 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
       }
       return 'retry'
     }
-  }, [editor, notes, newNoteId, sync, onChanged, allowNextNavigation, navigate, editorSession, actions])
+  }, [editor, notes, newNoteId, ownerId, keepDraft, sync, onChanged, allowNextNavigation, navigate, editorSession, actions])
 
   const { saveNow, retrying } = useAutosave({
     editCount: view.edits,
     isDirty: () => unsaved(live.current),
     save: saveOnce,
   })
+
+  // Signing out saves open notes first (and keeps a copy of anything that cannot be saved).
+  useEffect(
+    () =>
+      registerOpenNote(async () => {
+        keepDraft()
+        await saveNow()
+      }),
+    [keepDraft, saveNow],
+  )
 
   // Ctrl+S or Cmd+S saves at once, wherever the cursor is.
   useEffect(() => {
@@ -270,30 +401,33 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
     return () => window.removeEventListener('keydown', onKey)
   }, [saveNow])
 
-  // Leaving with unsaved changes: save first, then go. Ask only if saving fails.
+  // Leaving with unsaved changes: save first, then go. If that fails but the
+  // changes are kept on this computer, go anyway; ask only if they are not.
   useEffect(() => {
     if (blocker.state !== 'blocked') return
     let active = true
     void saveNow().then((outcome) => {
       if (!active) return
-      if (outcome === 'saved' && !unsaved(live.current)) blocker.proceed()
+      if ((outcome === 'saved' && !unsaved(live.current)) || keepDraft()) blocker.proceed()
       else setLeaveFailed(true)
     })
     return () => {
       active = false
     }
-  }, [blocker, saveNow])
+  }, [blocker, saveNow, keepDraft])
 
-  /** Shows a newer version from the database in place of what is on screen. */
+  /** Shows a version from the database in place of what is on screen. */
   const showVersion = useCallback(
     (fresh: Note) => {
       editor.commands.setContent(fresh.content as JSONContent, { emitUpdate: false })
+      latestDoc.current = editor.state.doc
       live.current = {
         ...live.current,
         saved: savedFrom(fresh),
         title: fresh.title,
         contextId: fresh.contextId,
         savedContentVersion: live.current.contentVersion,
+        draftedEdits: -1,
         conflict: false,
       }
       sync()
@@ -384,26 +518,52 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
     }
   }
 
+  /** The owner chose to throw away the changes restored from this computer. */
+  const discardRestored = () => {
+    if (ownerId) drafts.remove(ownerId, saved.id ?? newNoteId)
+    setRestoredNotice(null)
+    if (note) {
+      showVersion(note)
+      return
+    }
+    // A new note that never reached the database: nothing remains of it.
+    live.current = { ...live.current, title: '', contentVersion: live.current.savedContentVersion, draftedEdits: -1 }
+    sync()
+    allowNextNavigation()
+    navigate('/notes')
+  }
+
+  const deleteHeld = () => {
+    if (ownerId && held) drafts.remove(ownerId, held.noteId, true)
+    setHeld(null)
+    setShowHeld(false)
+  }
+
   // An archived context stays listed only for a note already in it.
   const contextChoices = contexts.filter((context) => !context.archivedAt || context.id === contextId)
 
   let status: string
   let warning = false
   if (view.conflict) {
-    status = 'Not saved: changed on another device'
+    status = keptHere
+      ? 'Not saved: changed on another device. Your changes are kept on this computer.'
+      : 'Not saved: changed on another device'
     warning = true
   } else if (phase.kind === 'saving') {
     status = 'Saving…'
   } else if (phase.kind === 'failed' && dirty) {
     warning = true
-    status =
-      phase.reason === 'offline'
-        ? 'Not saved: Nexus cannot reach the database. Retrying automatically.'
-        : phase.reason === 'refused'
-          ? 'Not saved: checking your sign-in. Retrying automatically.'
-          : retrying
-            ? 'Not saved. Retrying automatically.'
-            : 'Not saved.'
+    if (phase.reason === 'offline') {
+      status = keptHere
+        ? 'Offline: kept on this computer. Will save when connected.'
+        : 'Not saved: Nexus cannot reach the database. Retrying automatically.'
+    } else if (phase.reason === 'refused') {
+      status = keptHere
+        ? 'Sign in again to save: your changes are kept on this computer.'
+        : 'Not saved: checking your sign-in. Retrying automatically.'
+    } else {
+      status = `Not saved${keptHere ? ': kept on this computer' : ''}.${retrying ? ' Retrying automatically.' : ''}`
+    }
   } else if (dirty) {
     status = 'Unsaved changes'
     warning = true
@@ -480,9 +640,18 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
         </div>
       </div>
 
+      {ownerId && !storageOk && (
+        <p className={styles.storageNote}>
+          This browser is not keeping copies of unsaved changes, so Nexus will warn you before you leave a note
+          that is not yet saved.
+        </p>
+      )}
+
       {blocker.state === 'blocked' && leaveFailed && (
         <div className={styles.confirm} role="alertdialog" aria-labelledby={`${titleId}-confirm`}>
-          <p id={`${titleId}-confirm`}>Your latest changes could not be saved. Leave without them?</p>
+          <p id={`${titleId}-confirm`}>
+            Your latest changes could not be saved, and this browser could not keep a copy. Leave without them?
+          </p>
           <div className={styles.confirmActions}>
             <button
               className={styles.keep}
@@ -502,11 +671,47 @@ function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProp
         </div>
       )}
 
+      {restoredNotice && (
+        <div className={styles.restored} role="status">
+          <p>
+            Restored your unsaved changes from this computer ({editedLabel(restoredNotice.changedAt, new Date())}).
+            They will save automatically.
+          </p>
+          <button className={styles.textButton} type="button" onClick={discardRestored}>
+            Discard them
+          </button>
+        </div>
+      )}
+
+      {held && (
+        <div className={styles.held} role="region" aria-label="Changes kept aside">
+          <div className={styles.heldRow}>
+            <p>
+              Unsaved changes from this computer ({editedLabel(held.changedAt, new Date())}) were kept aside, because
+              this note has since changed on another device. They have not been applied.
+            </p>
+            <button className={styles.textButton} type="button" onClick={() => setShowHeld((shown) => !shown)}>
+              {showHeld ? 'Hide them' : 'Show them'}
+            </button>
+            <button className={styles.textButton} type="button" onClick={deleteHeld}>
+              Delete them
+            </button>
+          </div>
+          {showHeld && (
+            <div className={styles.heldText}>
+              <p className={styles.heldTitle}>{held.title || 'Untitled'}</p>
+              <p className={styles.heldBody}>{noteText(held.content)}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {view.conflict && (
         <div className={styles.conflict} role="alert">
           <p>
             This note was changed on another device since you opened it. Nothing was overwritten, and your changes
-            here are not being saved. Copy anything you want to keep, then reload the note.
+            here are not being saved{keptHere ? ', but they are kept on this computer' : ''}. Copy anything you want to
+            keep, then reload the note.
           </p>
           <button className={styles.textButton} type="button" disabled={busy} onClick={() => void reloadNote()}>
             Reload note

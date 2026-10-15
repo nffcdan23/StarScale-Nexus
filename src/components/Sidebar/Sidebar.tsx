@@ -7,8 +7,12 @@ import { GlassPanel } from '../GlassPanel/GlassPanel'
 import { NexusMark } from '../NexusMark/NexusMark'
 import styles from './Sidebar.module.css'
 
-/** The desktop sidebar: brand at the top, then the sections listed in navigation.ts. */
-export function Sidebar() {
+/**
+ * The desktop sidebar: brand at the top, then the sections listed in
+ * navigation.ts. onSignOut replaces the plain sign-out, so the page can
+ * first look after unsaved work.
+ */
+export function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
   const { actions } = useAuth()
 
   return (
@@ -46,7 +50,7 @@ export function Sidebar() {
           type="button"
           className={styles.item}
           data-label="Sign out"
-          onClick={() => void actions.signOut()}
+          onClick={() => (onSignOut ? onSignOut() : void actions.signOut())}
         >
           <LogOut className={styles.icon} aria-hidden="true" />
           <span className={styles.label}>Sign out</span>

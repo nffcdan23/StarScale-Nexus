@@ -166,3 +166,9 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Unsaved changes kept on this computer */
+.draftBadge {
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+}

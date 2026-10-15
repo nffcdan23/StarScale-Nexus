@@ -22,6 +22,8 @@ export type AuthStatus =
 export interface AuthSnapshot {
   status: AuthStatus
   email: string | null
+  /** The sign-in's account id, for keeping things such as note drafts to their own account. */
+  userId: string | null
 }
 
 export interface Enrolment {

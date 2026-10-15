@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router'
+import { useAuth } from '../../app/auth/authContext'
 import { useData } from '../../app/data/dataContext'
 import { GlassPanel } from '../../components/GlassPanel/GlassPanel'
 import { useContexts } from '../../features/contexts/useContexts'
+import { drafts, useNoteDrafts } from '../../features/notes/drafts'
 import { NoteEditorPane } from '../../features/notes/NoteEditorPane'
 import { NotesList, type NotesView } from '../../features/notes/NotesList'
 import { cx } from '../../lib/cx'
@@ -24,6 +26,14 @@ export function NotesPage() {
   const editorSession = (useLocation().state as { editorSession?: string } | null)?.editorSession
   const { notes } = useData()
   const contexts = useContexts()
+  const { state } = useAuth()
+  const ownerId = state.phase === 'ready' && state.snapshot.status === 'owner' ? state.snapshot.userId : null
+  const localDrafts = useNoteDrafts(ownerId)
+
+  // Drafts may be written again after an earlier "delete them and sign out".
+  useEffect(() => {
+    if (ownerId) drafts.allow(ownerId)
+  }, [ownerId])
   const [view, setView] = useState<NotesView>('active')
 
   // Each result remembers which list it belongs to, so switching lists never
@@ -43,6 +53,7 @@ export function NotesPage() {
           error={list.error}
           onRetry={list.reload}
           contexts={contexts.all}
+          drafts={localDrafts}
         />
       </GlassPanel>
 

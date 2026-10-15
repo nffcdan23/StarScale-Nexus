@@ -42,7 +42,7 @@ export function createSupabaseAuthService(client: SupabaseClient): AuthService {
       const { data, error } = await auth.getSession()
       if (error) throw friendly(error, 'Could not read your sign-in.')
       const session = data.session
-      if (!session) return { status: 'signed-out', email: null }
+      if (!session) return { status: 'signed-out', email: null, userId: null }
 
       const role = session.user.app_metadata?.nexus_role
       let currentLevel: string | null = null
@@ -53,7 +53,11 @@ export function createSupabaseAuthService(client: SupabaseClient): AuthService {
         currentLevel = levels.data.currentLevel
         nextLevel = levels.data.nextLevel
       }
-      return { status: statusFor({ role, currentLevel, nextLevel }), email: session.user.email ?? null }
+      return {
+        status: statusFor({ role, currentLevel, nextLevel }),
+        email: session.user.email ?? null,
+        userId: session.user.id,
+      }
     },
 
     subscribe(listener) {
