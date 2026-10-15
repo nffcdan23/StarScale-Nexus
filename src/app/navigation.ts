@@ -1,4 +1,4 @@
-import { Folder, House, SquareCheck, type LucideIcon } from 'lucide-react'
+import { Folder, House, NotebookPen, SquareCheck, type LucideIcon } from 'lucide-react'
 
 export interface NavEntry {
   id: string
@@ -27,6 +27,7 @@ export const navigation: NavGroup[] = [
     entries: [
       { id: 'mission-control', label: 'Mission Control', path: '/', icon: House },
       { id: 'tasks', label: 'Tasks', path: '/tasks', icon: SquareCheck },
+      { id: 'notes', label: 'Notes', path: '/notes', icon: NotebookPen },
       { id: 'projects', label: 'Projects', path: '/projects', icon: Folder },
     ],
   },

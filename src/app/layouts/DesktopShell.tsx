@@ -20,8 +20,10 @@ export function DesktopShell() {
         <Sidebar />
       </div>
       <main className={styles.main}>
-        {/* Keyed by address so the entrance transition replays on each page change. */}
-        <div key={pathname} className={styles.page}>
+        {/* Keyed by section (the first part of the address), so the entrance
+            transition replays when changing page but not when moving between
+            notes inside Notes. */}
+        <div key={pathname.split('/')[1]} className={styles.page}>
           <Outlet />
         </div>
       </main>

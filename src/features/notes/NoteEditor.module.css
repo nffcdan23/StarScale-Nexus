@@ -1,0 +1,383 @@
+/* The note editor: a calm writing surface, closer to Apple Notes than a form. */
+
+.editor {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.loading,
+.message {
+  padding: var(--space-8);
+  color: var(--text-secondary);
+}
+
+.message {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
+/* Context, save status, pin, archive and Save */
+.topBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.back {
+  display: none;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--text-primary);
+}
+
+.message .back {
+  display: inline-flex;
+}
+
+.context {
+  height: 34px;
+  max-width: 220px;
+  padding: 0 var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.context:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.status {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.unsaved {
+  color: var(--color-warning);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.iconButton[aria-pressed='true'] {
+  color: var(--color-accent);
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+
+.smallIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.save {
+  height: 36px;
+  padding: 0 var(--space-5);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-ink-950);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.save:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.iconButton:focus-visible,
+.save:focus-visible,
+.textButton:focus-visible,
+.context:focus-visible,
+.back:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Messages above the note */
+.confirm,
+.conflict,
+.archivedBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.confirm,
+.conflict {
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fde68a;
+}
+
+.confirm p,
+.conflict p,
+.archivedBanner p {
+  flex: 1;
+  min-width: 220px;
+}
+
+.confirmActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.archivedBanner {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+
+/* The writing surface: a comfortable reading width for long notes */
+.page {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: var(--space-4) var(--space-2) var(--space-12);
+}
+
+.title {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.title::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* The title and the text are writing surfaces: the cursor shows where you
+   are, so the general keyboard focus ring is not drawn around them. */
+.title:focus,
+.title:focus-visible,
+.prose:focus,
+.prose:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.content {
+  min-height: 40vh;
+}
+
+/* Formatting inside the note. ProseMirror draws this from the saved
+   document; it is never given HTML to insert. */
+.prose {
+  min-height: 40vh;
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+
+.prose > * + * {
+  margin-top: 0.6em;
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+  margin-top: 1.1em;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.prose h1 {
+  font-size: 1.6em;
+}
+
+.prose h2 {
+  font-size: 1.3em;
+}
+
+.prose h3 {
+  font-size: 1.1em;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li > p + * {
+  margin-top: 0.3em;
+}
+
+/* Checklists: TipTap draws a real checkbox in each item */
+.prose ul[data-type='taskList'] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.prose ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+}
+
+.prose ul[data-type='taskList'] li > label {
+  flex: none;
+  margin-top: 0.3em;
+}
+
+.prose ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
+.prose ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+}
+
+.prose input[type='checkbox'] {
+  width: 1em;
+  height: 1em;
+  accent-color: var(--color-accent-strong);
+  cursor: pointer;
+}
+
+.prose blockquote {
+  padding-left: 1em;
+  border-left: 3px solid rgba(160, 196, 255, 0.45);
+  color: var(--text-secondary);
+}
+
+.prose hr {
+  margin: 1.4em 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.prose code {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.prose pre {
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(5, 8, 20, 0.55);
+}
+
+.prose pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.88em;
+  white-space: pre;
+}
+
+.prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* "Start writing…" in an empty note */
+.prose p:global(.is-editor-empty):first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+@media (max-width: 1100px) {
+  .back {
+    display: inline-flex;
+  }
+}

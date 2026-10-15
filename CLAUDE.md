@@ -200,6 +200,21 @@ plain English, define technical terms, and go one step at a time.
   Links: `isSafeLink` (http, https, mailto) mirrors the database rule.
   `tests/security/lib/rich-note.json` is real editor output for every format;
   the editor tests and security check NOTE-23 both use it.
+- Workspace (3b-2): `/notes` (list), `/notes/new` (a note not yet in the
+  database; the first Save creates it and moves to its address) and
+  `/notes/<id>`. `src/pages/notes/NotesPage.tsx` (loaded lazily through
+  `LazyNotesPage`), `src/features/notes/` (`NotesList`, `NoteEditorPane`,
+  `editor/FormatToolbar`, `useUnsavedChangesGuard`). Save is explicit (button
+  or Ctrl/Cmd+S); title, text and context are edits and go through Save with
+  the note's revision; pin, archive and restore act at once (they do not
+  change the revision). Archive waits until changes are saved or discarded.
+  Archived notes open read-only with Restore. Leaving with unsaved changes
+  asks first (in the app) and the browser warns on closing. A conflict shows
+  a message and Reload note; nothing is overwritten. Under 1100 px the list
+  and the open note show one at a time. Notes is listed after Tasks.
+- The editor shows the stored document through ProseMirror; no stored text
+  is ever inserted as HTML. Typing shortcuts (# heading, - list, 1. list,
+  [ ] checklist, > quote, three backticks then a space for code, --- divider, **bold**) come with TipTap.
 - Lazy loading: only the Notes route may import the editor. The build check
   fails if ProseMirror code reaches the startup download. Measured in 3b-1:
   the editor download is 393 KB (124 KB compressed); the startup download is
@@ -329,8 +344,11 @@ implement any of these until the owner asks.
 - 3a Notes database, search, security checks and data layer: verified on the
   PC (104 of 104 real checks, integration tests passed).
 - 3b-1 Windows tools separated into `tools/windows`, TipTap installed and
-  configured: built on the Mac 15 October 2026; awaiting PC verification (105
-  real checks expected). Next: 3b-2 Notes workspace, only after that.
+  configured: verified on the PC 15 October 2026 (105 of 105 real checks, 17
+  integration tests).
+- 3b-2 Notes workspace and editor: built on the Mac 15 October 2026; awaiting
+  PC verification (no database change). Next: 3c autosave, local copies of
+  unsaved changes and the full conflict screen, which needs its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

@@ -1,0 +1,49 @@
+/* Notes list beside the editor. The list keeps its place while a long note
+   scrolls. */
+
+.workspace {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.listPanel {
+  position: sticky;
+  top: var(--space-3);
+  max-height: calc(100dvh - 2 * var(--shell-gutter) - var(--space-6));
+  overflow-y: auto;
+}
+
+.editorPanel {
+  min-height: calc(100dvh - 2 * var(--shell-gutter) - var(--space-6));
+  padding-inline: var(--space-8);
+}
+
+.empty {
+  padding: var(--space-12) var(--space-4);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Narrow screens: the list, or the open note with a way back */
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .listPanel {
+    position: static;
+    max-height: none;
+  }
+
+  .editorPanel {
+    min-height: 0;
+    padding-inline: var(--space-4);
+  }
+
+  .noteOpen .listPanel,
+  .workspace:not(.noteOpen) .editorPanel {
+    display: none;
+  }
+}

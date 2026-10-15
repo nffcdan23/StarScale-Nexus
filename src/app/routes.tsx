@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router'
 import { MissionControlPage } from '../pages/mission-control/MissionControlPage'
 import { NotFoundPage } from '../pages/not-found/NotFoundPage'
+import { LazyNotesPage } from '../pages/notes/LazyNotesPage'
 import { ProjectsPage } from '../pages/projects/ProjectsPage'
 import { SignInPage } from '../pages/sign-in/SignInPage'
 import { TasksPage } from '../pages/tasks/TasksPage'
@@ -24,6 +25,11 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <MissionControlPage /> },
           { path: 'tasks', element: <TasksPage /> },
+          {
+            // /notes, /notes/new (a note not yet saved) and /notes/<id>.
+            path: 'notes/:noteId?',
+            element: <LazyNotesPage />,
+          },
           { path: 'projects', element: <ProjectsPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],

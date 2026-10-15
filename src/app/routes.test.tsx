@@ -6,7 +6,7 @@ import { navigation } from './navigation'
 // Sign-in is settled asynchronously, so these use the "find" queries, which wait.
 
 describe('desktop shell (signed in as the owner with a code)', () => {
-  it('lists exactly the three working sections in the sidebar', async () => {
+  it('lists exactly the four working sections in the sidebar', async () => {
     renderApp('/')
 
     const nav = await screen.findByRole('navigation', { name: 'Primary' })
@@ -14,7 +14,7 @@ describe('desktop shell (signed in as the owner with a code)', () => {
       .getAllByRole('link')
       .map((link) => link.textContent)
 
-    expect(labels).toEqual(['Mission Control', 'Tasks', 'Projects'])
+    expect(labels).toEqual(['Mission Control', 'Tasks', 'Notes', 'Projects'])
   })
 
   it('opens Mission Control at the root address and marks it as current', async () => {

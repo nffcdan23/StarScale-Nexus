@@ -101,3 +101,41 @@ describe('note editor links', () => {
     expect(html).toContain('rel="noopener noreferrer nofollow"')
   })
 })
+
+describe('typing shortcuts', () => {
+  /** Types text one character at a time, the way a keyboard does. */
+  function type(current: Editor, text: string) {
+    for (const character of text) {
+      const { from, to } = current.state.selection
+      const handled = current.view.someProp('handleTextInput', (handler) =>
+        handler(current.view, from, to, character, () => current.state.tr.insertText(character, from, to)),
+      )
+      if (!handled) current.view.dispatch(current.state.tr.insertText(character, from, to))
+    }
+  }
+
+  it.each([
+    ['# ', 'heading'],
+    ['## ', 'heading'],
+    ['- ', 'bulletList'],
+    ['1. ', 'orderedList'],
+    ['[ ] ', 'taskList'],
+    ['> ', 'blockquote'],
+    ['``` ', 'codeBlock'],
+    ['---', 'horizontalRule'],
+  ])('"%s" at the start of a line becomes %s', (shortcut, type_) => {
+    const current = open()
+    current.commands.focus('end')
+    type(current, shortcut)
+    expect(typesIn(current.getJSON()).has(type_)).toBe(true)
+  })
+
+  it('**bold** and `code` work while typing', () => {
+    const current = open()
+    current.commands.focus('end')
+    type(current, 'Some **bold** and `code` ')
+    const types = typesIn(current.getJSON())
+    expect(types.has('bold')).toBe(true)
+    expect(types.has('code')).toBe(true)
+  })
+})

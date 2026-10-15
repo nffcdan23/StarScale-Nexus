@@ -1,0 +1,132 @@
+/* The formatting bar: quiet icon buttons with a restrained blue highlight. */
+
+.wrap {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.button:focus-visible,
+.linkInput:focus-visible,
+.linkButton:focus-visible,
+.linkAction:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.active {
+  background: var(--color-accent-wash);
+  color: var(--text-primary);
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+
+.smallIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--space-1);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* The link box, shown under the bar */
+.linkForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(160, 196, 255, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(10, 16, 34, 0.5);
+}
+
+.linkLabel {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.linkInput {
+  flex: 1;
+  min-width: 180px;
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.linkButton {
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-ink-950);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.linkAction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.linkAction:hover {
+  color: var(--text-primary);
+}
+
+.linkError {
+  flex-basis: 100%;
+  color: #fecaca;
+  font-size: var(--text-sm);
+}
