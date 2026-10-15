@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DataError, type NoteDoc } from '../../data/types'
 import { accounts, FakeAuthService } from '../../test/fakeAuth'
 import { FakeData } from '../../test/fakeData'
@@ -10,7 +10,7 @@ import { renderApp, signedInOwner, signedInTv } from '../../test/renderApp'
 
 const noteText = () => screen.getByLabelText('Note text')
 const titleBox = () => screen.getByLabelText('Title') as HTMLInputElement
-const saveButton = () => screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+const saveButton = () => screen.getByRole('button', { name: 'Save now' }) as HTMLButtonElement
 const status = () => within(screen.getByRole('region', { name: 'Note' })).getAllByRole('status')[0].textContent
 
 async function openNote(data: FakeData, id: string) {
@@ -140,18 +140,35 @@ describe('Editing and saving', () => {
     await waitFor(() => expect(data.noteRows[0].contextId).toBeNull())
   })
 
-  it('keeps the changes and explains when saving fails', async () => {
+  it('keeps the changes, says they are not saved, and saves when the connection returns', async () => {
     const data = new FakeData()
     const note = data.addNote({ title: 'Plans' })
-    data.failNextWrite = new DataError('offline', 'Could not save the note: Nexus cannot reach the database. Nothing was changed.')
+    data.failWrites = new DataError('offline', 'Could not save the note: Nexus cannot reach the database. Nothing was changed.')
     await openNote(data, note.id)
     fireEvent.change(titleBox(), { target: { value: 'Changed' } })
     fireEvent.click(saveButton())
 
-    expect((await screen.findByRole('alert')).textContent).toContain('cannot reach the database')
+    await waitFor(() => expect(status()).toBe('Not saved: Nexus cannot reach the database. Retrying automatically.'))
     expect(titleBox().value).toBe('Changed')
-    expect(status()).toBe('Unsaved changes')
     expect(data.noteRows[0].title).toBe('Plans')
+
+    data.failWrites = null
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    await waitFor(() => expect(status()).toMatch(/^Saved /))
+    expect(data.noteRows[0].title).toBe('Changed')
+  })
+
+  it('shows a value the database will not accept, and does not keep retrying it', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    data.failNextWrite = new DataError('invalid', 'Could not save the note: a value was not accepted.')
+    await openNote(data, note.id)
+    fireEvent.change(titleBox(), { target: { value: 'Changed' } })
+    fireEvent.click(saveButton())
+    expect((await screen.findByRole('alert')).textContent).toContain('a value was not accepted')
+    expect(status()).toBe('Not saved.')
   })
 })
 
@@ -290,7 +307,7 @@ describe('Pinning and archiving', () => {
     expect(await screen.findByText('This note is archived. Restore it to edit.')).toBeTruthy()
     expect(titleBox().readOnly).toBe(true)
     expect(noteText().getAttribute('contenteditable')).toBe('false')
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save now' })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore note' }))
     await waitFor(() => expect(noteText().getAttribute('contenteditable')).toBe('true'))
@@ -308,15 +325,29 @@ describe('Pinning and archiving', () => {
 })
 
 describe('Unsaved changes', () => {
-  it('asks before leaving a note with unsaved changes', async () => {
+  it('saves before leaving a note, then moves on without asking', async () => {
     const data = new FakeData()
     const first = data.addNote({ title: 'First' })
     data.addNote({ title: 'Second' })
+    await openNote(data, first.id)
+    fireEvent.change(titleBox(), { target: { value: 'First, edited' } })
+
+    fireEvent.click(within(screen.getByRole('region', { name: 'Recent notes' })).getByText('Second'))
+    await waitFor(() => expect(titleBox().value).toBe('Second'))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(data.noteRows.find((note) => note.id === first.id)?.title).toBe('First, edited')
+  })
+
+  it('asks before leaving only when the changes cannot be saved', async () => {
+    const data = new FakeData()
+    const first = data.addNote({ title: 'First' })
+    data.addNote({ title: 'Second' })
+    data.failWrites = new DataError('offline', 'Could not save the note: Nexus cannot reach the database. Nothing was changed.')
     const { router } = await openNote(data, first.id)
     fireEvent.change(titleBox(), { target: { value: 'First, edited' } })
 
     fireEvent.click(within(screen.getByRole('region', { name: 'Recent notes' })).getByText('Second'))
-    expect(await screen.findByRole('alertdialog')).toBeTruthy()
+    expect((await screen.findByRole('alertdialog')).textContent).toContain('could not be saved')
     expect(router.state.location.pathname).toBe(`/notes/${first.id}`)
 
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
@@ -324,25 +355,19 @@ describe('Unsaved changes', () => {
     expect(titleBox().value).toBe('First, edited')
 
     fireEvent.click(within(screen.getByRole('region', { name: 'Recent notes' })).getByText('Second'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave without saving' }))
     await waitFor(() => expect(titleBox().value).toBe('Second'))
     expect(data.noteRows.find((note) => note.id === first.id)?.title).toBe('First')
   })
 
-  it('asks before leaving Notes for another page, and lets a saved note go freely', async () => {
+  it('saves before leaving Notes for another page', async () => {
     const data = new FakeData()
     const note = data.addNote({ title: 'Plans' })
     const { router } = await openNote(data, note.id)
-
     fireEvent.change(titleBox(), { target: { value: 'Plans, edited' } })
     fireEvent.click(screen.getByRole('link', { name: 'Tasks' }))
-    expect(await screen.findByRole('alertdialog')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
-
-    fireEvent.click(saveButton())
-    await waitFor(() => expect(status()).toMatch(/^Saved /))
-    fireEvent.click(screen.getByRole('link', { name: 'Tasks' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/tasks'))
+    expect(data.noteRows[0].title).toBe('Plans, edited')
   })
 
   it('makes the browser warn before closing the tab with unsaved changes', async () => {
@@ -397,5 +422,140 @@ describe('Who can open Notes', () => {
   it('asks the owner for an authenticator code first', async () => {
     renderApp('/notes', new FakeAuthService({ account: accounts.owner, level: 'aal1' }), new FakeData())
     expect(await screen.findByRole('heading', { name: 'Enter your authenticator code' })).toBeTruthy()
+  })
+})
+
+describe('Autosave', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+  const wait = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+
+  it('saves two seconds after typing stops, with no button pressed', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    await openNote(data, note.id)
+    fireEvent.change(titleBox(), { target: { value: 'Plans for Q4' } })
+    await wait(1_500)
+    expect(data.noteRows[0].title).toBe('Plans')
+    await wait(600)
+    await waitFor(() => expect(data.noteRows[0].title).toBe('Plans for Q4'))
+    await waitFor(() => expect(status()).toMatch(/^Saved /))
+  })
+
+  it('saves text typed in the editor too', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Formatting', text: 'Some text' })
+    await openNote(data, note.id)
+    selectAllText()
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    await wait(2_100)
+    await waitFor(() => expect(typesIn(data.noteRows[0].content).has('bold')).toBe(true))
+  })
+
+  it('gives a new note its address on the first save without interrupting typing', async () => {
+    const data = new FakeData()
+    const { router } = renderApp('/notes', signedInOwner(), data)
+    fireEvent.click(await screen.findByRole('button', { name: 'New note' }))
+    await screen.findByLabelText('Note text')
+    const editorBefore = noteText()
+    titleBox().focus()
+    fireEvent.change(titleBox(), { target: { value: 'Ideas' } })
+
+    await wait(2_100)
+    await waitFor(() => expect(data.noteRows).toHaveLength(1))
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/notes/${data.noteRows[0].id}`))
+    // The same editor carries on, with the cursor where it was.
+    expect(noteText()).toBe(editorBefore)
+    expect(document.activeElement).toBe(titleBox())
+
+    fireEvent.change(titleBox(), { target: { value: 'Ideas, continued' } })
+    await wait(2_100)
+    await waitFor(() => expect(data.noteRows[0].title).toBe('Ideas, continued'))
+    expect(data.noteRows).toHaveLength(1)
+  })
+
+  it('creates a new note only once, however often a lost reply makes it retry', async () => {
+    const data = new FakeData()
+    renderApp('/notes/new', signedInOwner(), data)
+    await screen.findByLabelText('Note text')
+    // The note reaches the database but the reply is lost, as on a dropped connection.
+    const create = data.notes.create
+    let lostReplies = 2
+    data.notes.create = async (changes, options) => {
+      const note = await create(changes, options)
+      if (lostReplies-- > 0) throw new DataError('offline', 'Could not create the note: Nexus cannot reach the database.')
+      return note
+    }
+    fireEvent.change(titleBox(), { target: { value: 'Once only' } })
+    await wait(2_100)
+    await wait(5_000)
+    await wait(15_000)
+    await waitFor(() => expect(status()).toMatch(/^Saved /))
+    expect(data.noteRows).toHaveLength(1)
+  })
+
+  it('keeps retrying while offline and stops once saved', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    data.failWrites = new DataError('offline', 'Could not save the note: Nexus cannot reach the database. Nothing was changed.')
+    const save = vi.spyOn(data.notes, 'save')
+    await openNote(data, note.id)
+    fireEvent.change(titleBox(), { target: { value: 'Offline edit' } })
+
+    await wait(2_100)
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    await wait(5_000)
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    data.failWrites = null
+    await wait(15_000)
+    await waitFor(() => expect(data.noteRows[0].title).toBe('Offline edit'))
+    await wait(120_000)
+    expect(save).toHaveBeenCalledTimes(3)
+  })
+
+  it('stops saving a note that was changed on another device, and never overwrites it', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    const save = vi.spyOn(data.notes, 'save')
+    await openNote(data, note.id)
+    await act(() => data.notes.save(note.id, { title: 'From the PC' }, 1))
+    save.mockClear()
+
+    fireEvent.change(titleBox(), { target: { value: 'From the laptop' } })
+    await wait(2_100)
+    expect((await screen.findByRole('alert')).textContent).toContain('changed on another device')
+    expect(status()).toBe('Not saved: changed on another device')
+    await wait(120_000)
+    fireEvent.change(titleBox(), { target: { value: 'From the laptop, still typing' } })
+    await wait(30_000)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(data.noteRows[0].title).toBe('From the PC')
+  })
+
+  it('loads a newer version from another device when nothing here is unsaved', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans', text: 'Old text' })
+    await openNote(data, note.id)
+    await act(() => data.notes.save(note.id, { title: 'Plans, from the PC', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'New text' }] }] } }, 1))
+
+    await wait(30_000)
+    await waitFor(() => expect(titleBox().value).toBe('Plans, from the PC'))
+    expect(noteText().textContent).toContain('New text')
+    expect(status()).toMatch(/^Updated from another device /)
+
+    // Editing carries on from the newer version.
+    fireEvent.change(titleBox(), { target: { value: 'Plans, edited here' } })
+    await wait(2_100)
+    await waitFor(() => expect(data.noteRows[0]).toMatchObject({ title: 'Plans, edited here', revision: 3 }))
+  })
+
+  it('notices a note pinned or archived on another device', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    await openNote(data, note.id)
+    await act(() => data.notes.setArchived(note.id, true))
+    await wait(30_000)
+    expect(await screen.findByText('This note is archived. Restore it to edit.')).toBeTruthy()
   })
 })

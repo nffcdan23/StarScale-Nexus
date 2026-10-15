@@ -7,14 +7,20 @@ import { useBlocker, type BlockerFunction } from 'react-router'
  * the tab shows the browser's own warning.
  *
  * Call allowNextNavigation() just before a deliberate move that must not be
- * stopped, such as opening a note that has just been saved for the first time.
+ * stopped, such as giving a new note its address after its first save. It
+ * lets exactly one move through.
  */
 export function useUnsavedChangesGuard(dirty: boolean) {
   const allowed = useRef(false)
 
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) =>
-      dirty && !allowed.current && currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) => {
+      if (allowed.current) {
+        allowed.current = false
+        return false
+      }
+      return dirty && currentLocation.pathname !== nextLocation.pathname
+    },
     [dirty],
   )
   const blocker = useBlocker(shouldBlock)

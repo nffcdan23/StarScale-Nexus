@@ -1,16 +1,18 @@
 import type { JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Archive, ArchiveRestore, ArrowLeft, Pin } from 'lucide-react'
-import { useCallback, useEffect, useId, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../app/auth/authContext'
 import { useData } from '../../app/data/dataContext'
 import form from '../../components/Form/Form.module.css'
 import { DataError, limits, type Context, type Note, type NoteChanges, type NoteDoc } from '../../data/types'
 import { cx } from '../../lib/cx'
+import { londonClock } from '../../lib/dashboard'
 import { createNoteExtensions } from './editor/extensions'
 import { FormatToolbar } from './editor/FormatToolbar'
 import { editedLabel } from './noteTime'
+import { autosaveTiming, useAutosave, type SaveOutcome } from './useAutosave'
 import { useUnsavedChangesGuard } from './useUnsavedChangesGuard'
 import styles from './NoteEditor.module.css'
 
@@ -19,30 +21,31 @@ const emptyDoc: NoteDoc = { type: 'doc', content: [] }
 interface NoteEditorPaneProps {
   /** Null for a new note that has not been saved yet. */
   noteId: string | null
+  /** Identifies this editing session; unchanged when a new note gets its address. */
+  editorSession: string
   contexts: Context[]
   /** Called after anything the notes list shows has changed. */
   onChanged: () => void
 }
 
-/** Loads one note (or starts a new one) and shows it in the editor. */
-export function NoteEditorPane({ noteId, contexts, onChanged }: NoteEditorPaneProps) {
+/**
+ * Loads one note (or starts a new one) and shows it in the editor. The note
+ * is loaded once: when a new note's first save gives it an address, the same
+ * editor carries on.
+ */
+export function NoteEditorPane({ noteId, editorSession, contexts, onChanged }: NoteEditorPaneProps) {
   const { notes } = useData()
   const { actions } = useAuth()
-  const location = useLocation()
-  // A note saved for the first time arrives with the address change, so it
-  // need not be loaded again.
-  const handedOver = (location.state as { note?: Note } | null)?.note
-  const [loaded, setLoaded] = useState<{ id: string; note: Note } | null>(
-    handedOver && handedOver.id === noteId ? { id: handedOver.id, note: handedOver } : null,
-  )
+  const [initialId] = useState(noteId)
+  const [loaded, setLoaded] = useState<Note | null>(null)
   const [failure, setFailure] = useState<DataError | null>(null)
 
   useEffect(() => {
-    if (!noteId || loaded?.id === noteId) return
+    if (!initialId) return
     let active = true
-    notes.get(noteId).then(
+    notes.get(initialId).then(
       (note) => {
-        if (active) setLoaded({ id: noteId, note })
+        if (active) setLoaded(note)
       },
       (error: unknown) => {
         if (!active) return
@@ -54,7 +57,7 @@ export function NoteEditorPane({ noteId, contexts, onChanged }: NoteEditorPanePr
     return () => {
       active = false
     }
-  }, [noteId, loaded, notes, actions])
+  }, [initialId, notes, actions])
 
   if (failure) {
     return (
@@ -69,13 +72,14 @@ export function NoteEditorPane({ noteId, contexts, onChanged }: NoteEditorPanePr
       </div>
     )
   }
-  if (noteId && !loaded) return <p className={styles.loading}>Opening note…</p>
+  if (initialId && !loaded) return <p className={styles.loading}>Opening note…</p>
 
-  return <NoteEditor note={loaded?.note ?? null} contexts={contexts} onChanged={onChanged} />
+  return <NoteEditor note={loaded} editorSession={editorSession} contexts={contexts} onChanged={onChanged} />
 }
 
 interface NoteEditorProps {
   note: Note | null
+  editorSession: string
   contexts: Context[]
   onChanged: () => void
 }
@@ -101,33 +105,77 @@ const savedFrom = (note: Note | null): Saved => ({
   updatedAt: note?.updatedAt ?? null,
 })
 
-function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
+/** The latest edits and what is saved, always current (saves read these, never an older copy). */
+interface Live {
+  saved: Saved
+  title: string
+  contextId: string | null
+  /** Raised by every change to the text. */
+  contentVersion: number
+  /** The text version the last successful save sent. */
+  savedContentVersion: number
+  /** Raised by every edit of any kind. */
+  edits: number
+  conflict: boolean
+}
+
+const unsaved = (live: Pick<Live, 'saved' | 'title' | 'contextId' | 'contentVersion' | 'savedContentVersion'>) =>
+  live.saved.id === null
+    ? live.title.trim() !== '' || live.contentVersion !== live.savedContentVersion
+    : live.title !== live.saved.title ||
+      live.contextId !== live.saved.contextId ||
+      live.contentVersion !== live.savedContentVersion
+
+/** What the save status line says. */
+type Phase =
+  | { kind: 'idle' }
+  | { kind: 'saving' }
+  | { kind: 'saved'; at: Date }
+  | { kind: 'refreshed'; at: Date }
+  | { kind: 'failed'; reason: DataError['kind']; message: string }
+
+function NoteEditor({ note, editorSession, contexts, onChanged }: NoteEditorProps) {
   const { notes } = useData()
   const { actions } = useAuth()
   const navigate = useNavigate()
   const titleId = useId()
+  // A new note's id is fixed now, so a retried first save can never create a second note.
+  const [newNoteId] = useState(() => crypto.randomUUID())
 
-  const [saved, setSaved] = useState<Saved>(() => savedFrom(note))
-  const [title, setTitle] = useState(saved.title)
-  const [contextId, setContextId] = useState<string | null>(saved.contextId)
-  // Every edit to the text raises contentVersion; savedVersion is the
-  // version last saved. Typing while a save is on its way stays unsaved.
-  const [contentVersion, setContentVersion] = useState(0)
-  const [savedVersion, setSavedVersion] = useState(0)
+  // view draws the screen; live holds the same values for saving, updated
+  // the moment anything changes. sync() copies live into view.
+  const [view, setView] = useState<Live>(() => ({
+    saved: savedFrom(note),
+    title: note?.title ?? '',
+    contextId: note?.contextId ?? null,
+    contentVersion: 0,
+    savedContentVersion: 0,
+    edits: 0,
+    conflict: false,
+  }))
+  const live = useRef<Live>({ ...view })
+  const sync = useCallback(() => setView({ ...live.current }), [])
+
+  const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
-  const [conflict, setConflict] = useState(false)
-  const [justSaved, setJustSaved] = useState<Date | null>(null)
+  const [leaveFailed, setLeaveFailed] = useState(false)
 
+  const { saved, title, contextId } = view
   const archived = Boolean(saved.archivedAt)
   const isNew = saved.id === null
+  const dirty = unsaved(view)
 
   const editor = useEditor({
     extensions: createNoteExtensions(),
     content: (note?.content ?? emptyDoc) as JSONContent,
     editable: !archived,
     editorProps: { attributes: { 'aria-label': 'Note text', class: styles.prose } },
-    onUpdate: () => setContentVersion((version) => version + 1),
+    onUpdate: () => {
+      live.current.contentVersion += 1
+      live.current.edits += 1
+      sync()
+    },
   })
 
   useEffect(() => {
@@ -135,83 +183,186 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
     editor.setEditable(!archived, false)
   }, [editor, archived])
 
-  const contentChanged = contentVersion !== savedVersion
-  const dirty = isNew
-    ? title.trim() !== '' || contentChanged
-    : title !== saved.title || contextId !== saved.contextId || contentChanged
-  const canSave = dirty && !busy && !conflict && !archived
+  const editTitle = (value: string) => {
+    live.current.title = value
+    live.current.edits += 1
+    sync()
+  }
+  const editContext = (value: string | null) => {
+    live.current.contextId = value
+    live.current.edits += 1
+    sync()
+  }
 
   const { blocker, allowNextNavigation } = useUnsavedChangesGuard(dirty)
 
-  const report = useCallback(
-    (error: unknown) => {
-      const failure = error instanceof DataError ? error : new DataError('unknown', String(error))
-      if (failure.kind === 'conflict') setConflict(true)
-      else setProblem(failure.message)
-      if (failure.kind === 'refused') void actions.recheck()
-    },
-    [actions],
-  )
+  /** One save attempt with the latest edits; autosave decides when. */
+  const saveOnce = useCallback(async (): Promise<SaveOutcome> => {
+    const current = live.current
+    if (current.conflict || current.saved.archivedAt) return 'stop'
+    if (!unsaved(current)) return 'saved'
 
-  const save = useCallback(async () => {
-    if (!canSave) return
-    setBusy(true)
-    setProblem(null)
-    const version = contentVersion
+    const base = current.saved
+    const title = current.title
+    const contextId = current.contextId
+    const version = current.contentVersion
     const content = editor.getJSON() as NoteDoc
+    setPhase({ kind: 'saving' })
+    setProblem(null)
     try {
-      if (saved.id === null) {
-        const created = await notes.create({ title, content, contextId })
-        onChanged()
-        allowNextNavigation()
-        navigate(`/notes/${created.id}`, { replace: true, state: { note: created } })
-        return
+      let result: Note
+      if (base.id === null) {
+        result = await notes.create({ title, content, contextId }, { id: newNoteId })
+      } else {
+        const changes: NoteChanges = {}
+        if (title !== base.title) changes.title = title
+        if (contextId !== base.contextId) changes.contextId = contextId
+        if (version !== current.savedContentVersion) changes.content = content
+        // The revision this edit started from: a newer one in the database is never overwritten.
+        result = await notes.save(base.id, changes, base.revision)
       }
-      const changes: NoteChanges = {}
-      if (title !== saved.title) changes.title = title
-      if (contextId !== saved.contextId) changes.contextId = contextId
-      if (contentChanged) changes.content = content
-      const result = await notes.save(saved.id, changes, saved.revision)
-      setSaved(savedFrom(result))
-      setSavedVersion(version)
-      setJustSaved(new Date())
+      // Only what was sent counts as saved; anything typed since stays unsaved.
+      live.current.saved = savedFrom(result)
+      live.current.savedContentVersion = version
+      sync()
+      setPhase({ kind: 'saved', at: new Date() })
       onChanged()
+      if (base.id === null) {
+        // Give the new note its address without leaving this editor.
+        allowNextNavigation()
+        navigate(`/notes/${result.id}`, { replace: true, state: { editorSession } })
+      }
+      return 'saved'
     } catch (error) {
-      report(error)
-    } finally {
-      setBusy(false)
+      const failure = error instanceof DataError ? error : new DataError('unknown', String(error))
+      if (failure.kind === 'conflict') {
+        // Stop saving this note until the owner decides; nothing is overwritten.
+        live.current.conflict = true
+        sync()
+        setPhase({ kind: 'idle' })
+        return 'stop'
+      }
+      setPhase({ kind: 'failed', reason: failure.kind, message: failure.message })
+      if (failure.kind === 'refused') void actions.recheck()
+      if (failure.kind === 'invalid' || failure.kind === 'missing') {
+        setProblem(failure.message)
+        return 'stop'
+      }
+      return 'retry'
     }
-  }, [canSave, contentVersion, editor, saved, notes, title, contextId, contentChanged, onChanged, allowNextNavigation, navigate, report])
+  }, [editor, notes, newNoteId, sync, onChanged, allowNextNavigation, navigate, editorSession, actions])
 
-  // Ctrl+S or Cmd+S saves, wherever the cursor is.
+  const { saveNow, retrying } = useAutosave({
+    editCount: view.edits,
+    isDirty: () => unsaved(live.current),
+    save: saveOnce,
+  })
+
+  // Ctrl+S or Cmd+S saves at once, wherever the cursor is.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
-        void save()
+        void saveNow()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [save])
+  }, [saveNow])
+
+  // Leaving with unsaved changes: save first, then go. Ask only if saving fails.
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    let active = true
+    void saveNow().then((outcome) => {
+      if (!active) return
+      if (outcome === 'saved' && !unsaved(live.current)) blocker.proceed()
+      else setLeaveFailed(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [blocker, saveNow])
+
+  /** Shows a newer version from the database in place of what is on screen. */
+  const showVersion = useCallback(
+    (fresh: Note) => {
+      editor.commands.setContent(fresh.content as JSONContent, { emitUpdate: false })
+      live.current = {
+        ...live.current,
+        saved: savedFrom(fresh),
+        title: fresh.title,
+        contextId: fresh.contextId,
+        savedContentVersion: live.current.contentVersion,
+        conflict: false,
+      }
+      sync()
+    },
+    [editor, sync],
+  )
+
+  // Changes made on another device: while nothing here is unsaved, check the
+  // note's revision every 30 seconds and whenever the tab is shown, and load
+  // a newer version quietly. With unsaved changes the save itself detects
+  // the conflict, so nothing is overwritten either way.
+  const noteId = saved.id
+  useEffect(() => {
+    if (!noteId) return
+    let active = true
+    const check = async () => {
+      if (document.visibilityState !== 'visible' || live.current.conflict || unsaved(live.current)) return
+      try {
+        const version = await notes.peek(noteId)
+        const base = live.current.saved
+        if (!active || version.revision < base.revision) return
+        if (version.revision > base.revision) {
+          const editsBefore = live.current.edits
+          const fresh = await notes.get(noteId)
+          // Typing started meanwhile: leave it; the next save will notice the conflict.
+          if (!active || live.current.edits !== editsBefore || unsaved(live.current)) return
+          showVersion(fresh)
+          setPhase({ kind: 'refreshed', at: new Date(fresh.updatedAt) })
+          onChanged()
+        } else if (version.pinned !== base.pinned || version.archivedAt !== base.archivedAt) {
+          live.current.saved = { ...base, pinned: version.pinned, archivedAt: version.archivedAt }
+          sync()
+          onChanged()
+        }
+      } catch {
+        // A failed check changes nothing; the next check, or a save, reports any real problem.
+      }
+    }
+    const timer = setInterval(() => void check(), autosaveTiming.peek)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void check()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      active = false
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [noteId, notes, showVersion, sync, onChanged])
 
   const runAction = async (work: () => Promise<Partial<Saved>>, after?: () => void) => {
     setBusy(true)
     setProblem(null)
     try {
       const changed = await work()
-      setSaved((current) => ({ ...current, ...changed }))
+      live.current.saved = { ...live.current.saved, ...changed }
+      sync()
       onChanged()
       after?.()
     } catch (error) {
-      report(error)
+      const failure = error instanceof DataError ? error : new DataError('unknown', String(error))
+      if (failure.kind === 'refused') void actions.recheck()
+      setProblem(failure.message)
     } finally {
       setBusy(false)
     }
   }
 
-  const togglePin = () =>
-    runAction(async () => ({ pinned: (await notes.setPinned(saved.id!, !saved.pinned)).pinned }))
+  const togglePin = () => runAction(async () => ({ pinned: (await notes.setPinned(saved.id!, !saved.pinned)).pinned }))
   const archive = () =>
     runAction(
       async () => ({ archivedAt: (await notes.setArchived(saved.id!, true)).archivedAt }),
@@ -223,16 +374,11 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
     if (!saved.id) return
     setBusy(true)
     try {
-      const fresh = await notes.get(saved.id)
-      editor.commands.setContent(fresh.content as JSONContent, { emitUpdate: false })
-      setSaved(savedFrom(fresh))
-      setTitle(fresh.title)
-      setContextId(fresh.contextId)
-      setSavedVersion(contentVersion)
-      setConflict(false)
+      showVersion(await notes.get(saved.id))
+      setPhase({ kind: 'idle' })
       setProblem(null)
     } catch (error) {
-      report(error)
+      setProblem(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
@@ -242,11 +388,34 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
   const contextChoices = contexts.filter((context) => !context.archivedAt || context.id === contextId)
 
   let status: string
-  if (busy) status = 'Saving…'
-  else if (dirty) status = 'Unsaved changes'
-  else if (justSaved) status = `Saved ${editedLabel(justSaved.toISOString(), new Date())}`
-  else if (saved.updatedAt) status = `Edited ${editedLabel(saved.updatedAt, new Date())}`
-  else status = 'New note'
+  let warning = false
+  if (view.conflict) {
+    status = 'Not saved: changed on another device'
+    warning = true
+  } else if (phase.kind === 'saving') {
+    status = 'Saving…'
+  } else if (phase.kind === 'failed' && dirty) {
+    warning = true
+    status =
+      phase.reason === 'offline'
+        ? 'Not saved: Nexus cannot reach the database. Retrying automatically.'
+        : phase.reason === 'refused'
+          ? 'Not saved: checking your sign-in. Retrying automatically.'
+          : retrying
+            ? 'Not saved. Retrying automatically.'
+            : 'Not saved.'
+  } else if (dirty) {
+    status = 'Unsaved changes'
+    warning = true
+  } else if (phase.kind === 'saved') {
+    status = `Saved ${londonClock(phase.at)}`
+  } else if (phase.kind === 'refreshed') {
+    status = `Updated from another device ${londonClock(phase.at)}`
+  } else if (saved.updatedAt) {
+    status = `Edited ${editedLabel(saved.updatedAt, new Date())}`
+  } else {
+    status = 'New note'
+  }
 
   return (
     <div className={styles.editor}>
@@ -260,7 +429,7 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
           aria-label="Context"
           value={contextId ?? ''}
           disabled={archived}
-          onChange={(event) => setContextId(event.target.value || null)}
+          onChange={(event) => editContext(event.target.value || null)}
         >
           <option value="">Uncategorised</option>
           {contextChoices.map((context) => (
@@ -269,7 +438,7 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
             </option>
           ))}
         </select>
-        <span className={cx(styles.status, dirty && styles.unsaved)} role="status">
+        <span className={cx(styles.status, warning && styles.unsaved)} role="status">
           {status}
         </span>
         <div className={styles.actions}>
@@ -290,7 +459,7 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
                 className={styles.iconButton}
                 type="button"
                 aria-label="Archive note"
-                title={dirty ? 'Save or discard your changes first' : 'Archive note'}
+                title={dirty ? 'Wait until your changes are saved' : 'Archive note'}
                 disabled={busy || dirty}
                 onClick={archive}
               >
@@ -299,32 +468,45 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
             </>
           )}
           {!archived && (
-            <button className={styles.save} type="button" disabled={!canSave} onClick={() => void save()}>
-              Save
+            <button
+              className={styles.saveNow}
+              type="button"
+              disabled={!dirty || phase.kind === 'saving' || view.conflict}
+              onClick={() => void saveNow()}
+            >
+              Save now
             </button>
           )}
         </div>
       </div>
 
-      {blocker.state === 'blocked' && (
+      {blocker.state === 'blocked' && leaveFailed && (
         <div className={styles.confirm} role="alertdialog" aria-labelledby={`${titleId}-confirm`}>
-          <p id={`${titleId}-confirm`}>This note has unsaved changes. Leave without saving them?</p>
+          <p id={`${titleId}-confirm`}>Your latest changes could not be saved. Leave without them?</p>
           <div className={styles.confirmActions}>
-            <button className={styles.save} type="button" autoFocus onClick={() => blocker.reset()}>
+            <button
+              className={styles.keep}
+              type="button"
+              autoFocus
+              onClick={() => {
+                setLeaveFailed(false)
+                blocker.reset()
+              }}
+            >
               Keep editing
             </button>
             <button className={styles.textButton} type="button" onClick={() => blocker.proceed()}>
-              Discard changes
+              Leave without saving
             </button>
           </div>
         </div>
       )}
 
-      {conflict && (
+      {view.conflict && (
         <div className={styles.conflict} role="alert">
           <p>
-            This note was changed on another device since you opened it. Nothing was overwritten. Copy anything you
-            want to keep, then reload the note.
+            This note was changed on another device since you opened it. Nothing was overwritten, and your changes
+            here are not being saved. Copy anything you want to keep, then reload the note.
           </p>
           <button className={styles.textButton} type="button" disabled={busy} onClick={() => void reloadNote()}>
             Reload note
@@ -358,7 +540,7 @@ function NoteEditor({ note, contexts, onChanged }: NoteEditorProps) {
           value={title}
           readOnly={archived}
           autoFocus={isNew}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => editTitle(event.target.value)}
         />
         {!archived && <FormatToolbar editor={editor} />}
         <EditorContent editor={editor} className={styles.content} />

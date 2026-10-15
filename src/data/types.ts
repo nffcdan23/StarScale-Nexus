@@ -109,6 +109,15 @@ export interface Note extends NoteSummary {
   text: string
 }
 
+/** A note's revision and status without its content: enough to notice a change made elsewhere. */
+export interface NoteVersion {
+  id: string
+  revision: number
+  updatedAt: string
+  pinned: boolean
+  archivedAt: string | null
+}
+
 /** The parts of a note the owner edits. Anything left out is unchanged. */
 export interface NoteChanges {
   title?: string
@@ -184,7 +193,13 @@ export interface NotesService {
   /** Active notes, pinned first then most recently edited; or archived notes, most recently archived first. */
   list(options?: { archived?: boolean }): Promise<NoteSummary[]>
   get(id: string): Promise<Note>
-  create(changes?: NoteChanges): Promise<Note>
+  /** Reads only the revision and status, never the content. */
+  peek(id: string): Promise<NoteVersion>
+  /**
+   * Creates a note. Pass the same id when retrying, so a request that reached
+   * the database but whose reply was lost never creates a second copy.
+   */
+  create(changes?: NoteChanges, options?: { id?: string }): Promise<Note>
   /**
    * Saves edits made to the given revision. If the note has changed since
    * (another device saved first), nothing is saved and a DataError with kind

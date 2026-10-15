@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { useParams } from 'react-router'
+import { useLocation, useParams } from 'react-router'
 import { useData } from '../../app/data/dataContext'
 import { GlassPanel } from '../../components/GlassPanel/GlassPanel'
 import { useContexts } from '../../features/contexts/useContexts'
@@ -19,6 +19,9 @@ import styles from './NotesPage.module.css'
 export function NotesPage() {
   useDocumentTitle('Notes')
   const { noteId } = useParams()
+  // A new note keeps the same editor when its first save gives it an address,
+  // so typing is never interrupted. Each New note starts a fresh session.
+  const editorSession = (useLocation().state as { editorSession?: string } | null)?.editorSession
   const { notes } = useData()
   const contexts = useContexts()
   const [view, setView] = useState<NotesView>('active')
@@ -46,8 +49,9 @@ export function NotesPage() {
       <GlassPanel as="section" padding="md" className={styles.editorPanel} aria-label="Note">
         {noteId ? (
           <NoteEditorPane
-            key={noteId}
+            key={editorSession ?? noteId}
             noteId={noteId === 'new' ? null : noteId}
+            editorSession={editorSession ?? noteId}
             contexts={contexts.all}
             onChanged={list.reload}
           />

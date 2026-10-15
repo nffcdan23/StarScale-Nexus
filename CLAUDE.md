@@ -212,6 +212,24 @@ plain English, define technical terms, and go one step at a time.
   asks first (in the app) and the browser warns on closing. A conflict shows
   a message and Reload note; nothing is overwritten. Under 1100 px the list
   and the open note show one at a time. Notes is listed after Tasks.
+- Autosave (3c-1, `src/features/notes/useAutosave.ts`): 2 s after the last
+  edit, at least every 15 s while editing, at once on Ctrl/Cmd+S, Save now,
+  hiding the tab or leaving the note. One save at a time. Failed saves retry
+  after 5, 15, 30 s then every minute, and at once when the network returns
+  or the tab is shown. A conflict stops saving that note until the owner
+  reloads it (full conflict screen is 3c-3); a rejected value is not retried.
+  The editor keeps its latest edits and last-saved revision in a ref that
+  every save reads, so a save never sends stale data or an old revision.
+- A new note gets a fixed id on the device; its first save creates it with
+  that id (`notes.create(changes, { id })`), so a retry can never make a
+  second note. The editor session survives the address change from
+  `/notes/new` to `/notes/<id>` (`editorSession` in the navigation state).
+- While nothing is unsaved, an open note checks `notes.peek` (revision,
+  pinned, archived; never content) every 30 s and when the tab is shown, and
+  loads a newer version quietly. Leaving with unsaved changes saves first and
+  asks only if that save fails; the browser still warns on closing until
+  local drafts arrive in 3c-2. Status messages never claim changes are kept
+  on this computer: they are not, until 3c-2.
 - The editor shows the stored document through ProseMirror; no stored text
   is ever inserted as HTML. Typing shortcuts (# heading, - list, 1. list,
   [ ] checklist, > quote, three backticks then a space for code, --- divider, **bold**) come with TipTap.
@@ -346,9 +364,12 @@ implement any of these until the owner asks.
 - 3b-1 Windows tools separated into `tools/windows`, TipTap installed and
   configured: verified on the PC 15 October 2026 (105 of 105 real checks, 17
   integration tests).
-- 3b-2 Notes workspace and editor: built on the Mac 15 October 2026; awaiting
-  PC verification (no database change). Next: 3c autosave, local copies of
-  unsaved changes and the full conflict screen, which needs its own go-ahead.
+- 3b-2 Notes workspace and editor: verified on the PC.
+- 3c-1 Autosave, retries, seamless first save, quiet refresh: built on the
+  Mac 15 October 2026; awaiting PC verification (no database change). Next:
+  3c-2 local drafts (approved: localStorage, owner-only, stable note id,
+  deleted only after a confirmed save), then 3c-3 conflict screen (Keep both
+  default, Use the other version, Use mine). Each needs its own go-ahead.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

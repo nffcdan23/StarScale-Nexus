@@ -49,11 +49,13 @@ export class FakeData implements DataServices {
   noteRows: Note[] = []
   /** When set, the next write fails with this error (then clears). */
   failNextWrite: DataError | null = null
+  /** While set, every write fails with this error (for example, while offline). */
+  failWrites: DataError | null = null
   /** While set, every read fails with this error. */
   failReads: DataError | null = null
 
   private takeFailure() {
-    const failure = this.failNextWrite
+    const failure = this.failNextWrite ?? this.failWrites
     this.failNextWrite = null
     if (failure) throw failure
   }
@@ -301,10 +303,19 @@ export class FakeData implements DataServices {
       this.checkRead()
       return structuredClone(this.findNote(id))
     },
-    create: async (changes = {}) => {
+    peek: async (id) => {
+      this.checkRead()
+      const note = this.findNote(id)
+      return { id: note.id, revision: note.revision, updatedAt: note.updatedAt, pinned: note.pinned, archivedAt: note.archivedAt }
+    },
+    create: async (changes = {}, options = {}) => {
       noteChangesToRow(changes)
       this.takeFailure()
+      // Like the database's primary key: the same id never makes a second note.
+      const existing = options.id && this.noteRows.find((entry) => entry.id === options.id)
+      if (existing) return structuredClone(existing)
       const note = this.addNote({ contextId: changes.contextId ?? null })
+      if (options.id) note.id = options.id
       this.applyNoteChanges(note, { title: changes.title, content: changes.content })
       note.revision = 1
       return structuredClone(note)

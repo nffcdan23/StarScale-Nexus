@@ -57,7 +57,7 @@ export function NotesList({ view, onViewChange, notes, error, onRetry, contexts 
     <div className={styles.list}>
       <div className={styles.header}>
         <h1 className={styles.heading}>Notes</h1>
-        <button className={styles.newButton} type="button" onClick={() => navigate('/notes/new')}>
+        <button className={styles.newButton} type="button" onClick={() => navigate('/notes/new', { state: { editorSession: crypto.randomUUID() } })}>
           <Plus className={styles.plusIcon} aria-hidden="true" />
           New note
         </button>

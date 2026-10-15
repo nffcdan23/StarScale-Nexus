@@ -321,6 +321,23 @@ describe('notes', () => {
     expect(note).toMatchObject({ id: 'n1', contextId: null, text: 'Quarterly review', revision: 3 })
   })
 
+  it('uses the id it is given, so a retried first save cannot make a second note', async () => {
+    const { services, calls } = recordingClient([{ data: noteRow }])
+    await services.notes.create({ title: 'Plans' }, { id: 'fixed-id' })
+    const inserted = calls[0].steps.find(([name]) => name === 'insert')![1][0] as Record<string, unknown>
+    expect(inserted.id).toBe('fixed-id')
+  })
+
+  it('peeks at a note\'s revision and status without loading its content', async () => {
+    const { services, calls } = recordingClient([
+      { data: { id: 'n1', revision: 4, updated_at: 'b', pinned: true, archived_at: null } },
+    ])
+    expect(await services.notes.peek('n1')).toEqual({ id: 'n1', revision: 4, updatedAt: 'b', pinned: true, archivedAt: null })
+    const columns = calls[0].steps.find(([name]) => name === 'select')![1][0] as string
+    expect(columns).not.toContain('content')
+    expect(calls[0].steps).toContainEqual(['eq', ['id', 'n1']])
+  })
+
   it('never sends the searchable text, the owner or the revision', async () => {
     const { services, calls } = recordingClient([{ data: noteRow }])
     await services.notes.save('n1', { title: 'New', content: doc, contextId: 'c1' }, 3)

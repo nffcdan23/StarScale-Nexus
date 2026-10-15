@@ -310,6 +310,29 @@ describe('notes against real Supabase (Phase 3a)', () => {
     expect(results[0].snippet.some((part) => part.match && part.text.toLowerCase().startsWith('quokkaberry'))).toBe(true)
   })
 
+  it('creates a note only once when the same first save is sent again (Phase 3c-1)', async () => {
+    const id = randomUUID()
+    const first = await ownerData.notes.create({ title: 'Sent twice', content: paragraph('Once only') }, { id })
+    const again = await ownerData.notes.create({ title: 'Sent twice', content: paragraph('Once only') }, { id })
+    expect(again.id).toBe(first.id)
+    expect((await ownerData.notes.list()).filter((entry) => entry.id === id)).toHaveLength(1)
+  })
+
+  it('peeks at revision and status without the content, and sees changes made elsewhere (Phase 3c-1)', async () => {
+    const note = await ownerData.notes.create({ title: 'Peeked', content: paragraph('Text') })
+    expect(await ownerData.notes.peek(note.id)).toEqual({
+      id: note.id,
+      revision: note.revision,
+      updatedAt: note.updatedAt,
+      pinned: false,
+      archivedAt: null,
+    })
+    await ownerData.notes.save(note.id, { title: 'Peeked again' }, note.revision)
+    await ownerData.notes.setPinned(note.id, true)
+    expect(await ownerData.notes.peek(note.id)).toMatchObject({ revision: note.revision + 1, pinned: true })
+    await expect(tvData.notes.peek(note.id)).rejects.toMatchObject({ kind: 'missing' })
+  })
+
   it('rejects a link that is not a web or email address', async () => {
     const note = await ownerData.notes.create({ title: 'Links' })
     const bad: NoteDoc = {

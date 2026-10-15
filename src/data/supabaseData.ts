@@ -11,6 +11,7 @@ import {
   type NoteSearchResult,
   type NotesService,
   type NoteSummary,
+  type NoteVersion,
   type SnippetPart,
   type Task,
   type TaskChanges,
@@ -392,10 +393,18 @@ function notesService(client: SupabaseClient): NotesService {
       return toNote(data as NoteRow)
     },
 
-    async create(changes = {}) {
+    async peek(id) {
+      const { data, error } = await client.from('notes').select('id, revision, updated_at, pinned, archived_at').eq('id', id).single()
+      if (error) throw toDataError(error, 'check the note')
+      const row = data as { id: string; revision: number; updated_at: string; pinned: boolean; archived_at: string | null }
+      return { id: row.id, revision: row.revision, updatedAt: row.updated_at, pinned: row.pinned, archivedAt: row.archived_at } satisfies NoteVersion
+    },
+
+    async create(changes = {}, options = {}) {
       const row = noteChangesToRow(changes)
-      // The id is made here, so a retried request can never create a second copy.
-      const id = crypto.randomUUID()
+      // The id is made on the device (or given by the caller), so a retried
+      // request can never create a second copy.
+      const id = options.id ?? crypto.randomUUID()
       const { data, error } = await client
         .from('notes')
         .insert({ id, ...row })

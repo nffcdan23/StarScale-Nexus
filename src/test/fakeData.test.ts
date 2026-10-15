@@ -46,4 +46,21 @@ describe('fake notes service', () => {
     await data.notes.save(older.id, { title: 'Older, edited' }, 1)
     expect((await data.notes.list()).map((note) => note.title)).toEqual(['Pinned', 'Older, edited', 'Newer'])
   })
+
+  it('creates a note once for a given id, however often the request is repeated', async () => {
+    const data = new FakeData()
+    const first = await data.notes.create({ title: 'Once' }, { id: 'stable-id' })
+    const again = await data.notes.create({ title: 'Once' }, { id: 'stable-id' })
+    expect(first.id).toBe('stable-id')
+    expect(again.id).toBe('stable-id')
+    expect(data.noteRows).toHaveLength(1)
+  })
+
+  it('peeks at revision and status', async () => {
+    const data = new FakeData()
+    const note = data.addNote({ title: 'Plans' })
+    await data.notes.save(note.id, { title: 'Plans v2' }, 1)
+    await data.notes.setPinned(note.id, true)
+    expect(await data.notes.peek(note.id)).toMatchObject({ revision: 2, pinned: true, archivedAt: null })
+  })
 })
