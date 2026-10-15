@@ -61,7 +61,27 @@ if (!existsSync(distDir)) {
       problems.push(`${where} contains administrator script code`)
     }
   }
-  if (problems.length === 0) console.log(`Bundle check: ${files.length} built files checked, no secrets found.`)
+  // 3. The note editor (TipTap and ProseMirror) must load only when Notes is
+  // opened, never as part of the first download that every page, the TV
+  // included, makes. The first download is the entry script in index.html
+  // and the files it preloads.
+  const indexHtml = readFileSync(join(distDir, 'index.html'), 'utf8')
+  const startup = [...indexHtml.matchAll(/<(?:script|link)[^>]+(?:src|href)="\/([^"]+\.js)"/g)].map((match) => match[1])
+  let startupBytes = 0
+  for (const asset of startup) {
+    const text = readFileSync(join(distDir, asset), 'utf8')
+    startupBytes += Buffer.byteLength(text)
+    if (/ProseMirror|prosemirror/.test(text)) {
+      problems.push(`${asset} is downloaded by every page but contains the note editor; load it only from Notes`)
+    }
+  }
+
+  if (problems.length === 0) {
+    console.log(
+      `Bundle check: ${files.length} built files checked, no secrets found; ` +
+        `first download ${(startupBytes / 1024).toFixed(0)} KB with no note editor code.`,
+    )
+  }
 }
 
 if (problems.length > 0) {

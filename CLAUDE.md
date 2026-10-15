@@ -49,6 +49,14 @@ plain English, define technical terms, and go one step at a time.
   values only in ignored `*.local` files with a committed example beside them.
 - Installed packages, caches, build output and local settings are not carried
   by Git. Each machine rebuilds them with `npm ci`.
+- Windows-only tools live in their own manifest, `tools/windows/package.json`
+  (`pg` and the `supabase` command-line tool, with their own lockfile), so
+  the main `npm ci` never brings them to the Mac. On the PC only: `npm run
+  setup:windows` installs them; `npm run supabase -- <command>` runs the
+  Supabase tool (never `npx supabase`, which would look elsewhere). Code that
+  needs `pg` loads it with `tools/windows/load-pg.mjs`. All of these refuse
+  to run anywhere but Windows. Never install anything into `tools/windows` on
+  the Mac; update its lockfile only with `--package-lock-only`.
 
 ## Security tests
 
@@ -63,10 +71,12 @@ plain English, define technical terms, and go one step at a time.
 - `supabase/config.toml` must keep sign-ups off (`[auth] enable_signup =
   false`) and authenticator codes on (`[auth.mfa.totp]`). Settings changes
   need the stack stopped and started again.
-- `pg` and `supabase` are development dependencies needed only on the PC, and
-  are not installed on the MacBook. Ask the owner before reinstalling the
-  Mac's packages, because `npm ci` would add both (the Supabase package would
-  stay inert, since install scripts are blocked).
+- `pg` and `supabase` are Windows-only (`tools/windows`, see Two computers)
+  and are not installed on the MacBook. Moved there in Phase 3b-1 because npm
+  cannot install part of a manifest: the Supabase tool arrives as a
+  platform-specific optional package, which blocking install scripts does not
+  stop, and skipping optional packages would also remove Vite's native build
+  parts. Still ask the owner before installing any new package on the Mac.
 - Results go to `docs/security-report.md`, which is generated, not written by
   hand. Every check is reported as Passed, FAILED, Not executed, Not possible
   or Stale. **A simulated pass is never proof that real Supabase security
@@ -113,8 +123,9 @@ plain English, define technical terms, and go one step at a time.
   (migration `20261015090000_task_due_on.sql`). The data layer always sends
   both columns together. Helpers in `src/lib/deadlines.ts`; tests run in
   London time (`vite.config.ts`).
-- Applying a new migration to the PC's existing local database: `npx supabase
-  migration up --local`. Never `supabase db reset` unless the owner wants the data gone.
+- Applying a new migration to the PC's existing local database: `npm run
+  supabase -- migration up --local`. Never `supabase db reset` unless the
+  owner wants the data gone.
 
 ## Live dashboards (Phase 2c-3)
 
@@ -179,9 +190,20 @@ plain English, define technical terms, and go one step at a time.
 - Data layer: `notes` in `src/data/types.ts` and `supabaseData.ts`;
   `save` takes the revision it was based on and throws a "conflict"
   DataError if the note changed elsewhere. The fake imitates the same rules.
-- Editor (3b, approved, not installed): TipTap, free MIT core only, feeling
-  closer to Apple Notes or Notion than Markdown. Confirm exact packages and
-  licences with the owner before installing.
+- Editor: TipTap 3.31.4, six packages (`@tiptap/react`, `core`, `pm`,
+  `starter-kit`, `extension-list`, `extensions`), 51 packages in all, every
+  one MIT, none with install scripts or native code, none from the paid Pro
+  registry. Installed in 3b-1. It should feel closer to Apple Notes or Notion
+  than Markdown. Formatting lives in `src/features/notes/editor/extensions.ts`:
+  headings 1-3, bold, italic, bullet, numbered and check lists, links, quotes,
+  dividers, inline code and code blocks; strikethrough and underline off.
+  Links: `isSafeLink` (http, https, mailto) mirrors the database rule.
+  `tests/security/lib/rich-note.json` is real editor output for every format;
+  the editor tests and security check NOTE-23 both use it.
+- Lazy loading: only the Notes route may import the editor. The build check
+  fails if ProseMirror code reaches the startup download. Measured in 3b-1:
+  the editor download is 393 KB (124 KB compressed); the startup download is
+  unchanged at 597 KB (174 KB compressed).
 - Backups: before important notes are stored, 3e must give a tested backup
   and restore. Keep two things apart: a full database backup (everything,
   for disaster recovery, restored into a fresh database and compared) and a
@@ -304,9 +326,11 @@ implement any of these until the owner asks.
 - 2c-3b Live Mission Control: checked by hand on the PC 14 October 2026.
   Its integration test results were not recorded in the repository.
 - 2c-3c Live TV: verified on the PC 14 October 2026 (owner's manual tests).
-- 3a Notes database, search, security checks and data layer: built on the
-  Mac 14 October 2026; awaiting PC verification (104 real checks expected).
-  Next: 3b, which needs its own go-ahead and package approval.
+- 3a Notes database, search, security checks and data layer: verified on the
+  PC (104 of 104 real checks, integration tests passed).
+- 3b-1 Windows tools separated into `tools/windows`, TipTap installed and
+  configured: built on the Mac 15 October 2026; awaiting PC verification (105
+  real checks expected). Next: 3b-2 Notes workspace, only after that.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

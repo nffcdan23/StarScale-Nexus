@@ -27,7 +27,8 @@ project, and nothing leaves the computer.
 
 ## Real checks (Windows PC only)
 
-1. Start the local Supabase stack. It applies `supabase/migrations` and reads
+1. Install the Windows-only tools once (`npm run setup:windows`), then start
+   the local Supabase stack (`npm run supabase -- start`). It applies `supabase/migrations` and reads
    `supabase/config.toml`, which must keep:
    - `[auth] enable_signup = false`: no public sign-ups (checked by REAL-08).
    - `[auth.mfa.totp] enroll_enabled = true` and `verify_enabled = true`:
@@ -36,7 +37,7 @@ project, and nothing leaves the computer.
    started again.
 2. Copy `.env.security.example` to `.env.security.local` and fill it in.
 3. Run `npm run test:security:real`. The last line gives passed, failed and
-   not executed counts out of the total (104 at Phase 3a).
+   not executed counts out of the total (105 at Phase 3b-1).
 4. Commit the updated `docs/security-report.md` and
    `tests/security/real/results.json`, so the results travel back with Git.
 
@@ -45,8 +46,10 @@ Every expected check is recorded as passed, failed or not executed; if the
 run stops early, the checks it never reached are recorded as not executed, so
 an older result can never look current.
 
-`pg` and `supabase` are in the development dependencies for the PC. Do not
-install them on the work MacBook: the simulated checks do not need them.
+`pg` and `supabase` are in `tools/windows/package.json`, installed only on
+the PC with `npm run setup:windows`. They are never installed on the work
+MacBook: the simulated checks do not need them, and the Windows tools refuse
+to run on any other system.
 
 ## Where things are
 

@@ -1,0 +1,11 @@
+{
+  "name": "starscale-nexus-windows-tools",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tools used only on the Windows PC: the PostgreSQL client for real security checks, integration tests and account set-up, and the Supabase command-line tool. Never installed on the MacBook.",
+  "dependencies": {
+    "pg": "8.23.1",
+    "supabase": "2.120.0"
+  }
+}

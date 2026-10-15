@@ -16,6 +16,7 @@ import { randomInt } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadPg } from '../tools/windows/load-pg.mjs'
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -96,9 +97,9 @@ const describe = (reply) =>
 async function connect(dbUrl) {
   let pg
   try {
-    pg = (await import('pg')).default
-  } catch {
-    fail('the "pg" package is not installed here. Run npm ci on the Windows PC.')
+    pg = loadPg()
+  } catch (error) {
+    fail(error.message)
   }
   const client = new pg.Client({ connectionString: dbUrl })
   await client.connect()

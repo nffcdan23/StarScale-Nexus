@@ -13,6 +13,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSupabaseDataServices } from '../../src/data/supabaseData'
 import type { DataServices, NoteDoc } from '../../src/data/types'
+import { loadPg } from '../../tools/windows/load-pg.mjs'
 import { authenticatorCode } from '../security/real/api-checks.mjs'
 
 if (existsSync('.env.security.local')) process.loadEnvFile('.env.security.local')
@@ -80,7 +81,8 @@ let db: { query: (sql: string, params?: unknown[]) => Promise<unknown>; end: () 
 
 beforeAll(async () => {
   assertLocal()
-  const pg = (await import('pg')).default
+  // Installed only on the Windows PC, in tools/windows.
+  const pg = loadPg()
   const client = new pg.Client({ connectionString: settings.dbUrl })
   await client.connect()
   db = client

@@ -1,4 +1,4 @@
-import { ids, noteDoc, secretNote, secretNoteBody } from './fixtures.mjs'
+import { ids, noteDoc, richNote, secretNote, secretNoteBody } from './fixtures.mjs'
 
 // The single list of who may do what. Each check is one SQL statement run as
 // one identity, with the outcome it must have. The same list is used against
@@ -558,6 +558,16 @@ export const cases = [
     title: 'An overlong search is refused',
     sql: `select * from public.search_notes(repeat('a', 201))`,
     expect: { errorCode: '22023' },
+  },
+  {
+    id: 'NOTE-23',
+    identity: 'ownerWithCode',
+    title: 'Every editor format (quotes, dividers, code included) is accepted and its text made searchable',
+    sql: `update public.notes set content = '${JSON.stringify(richNote.doc).replaceAll("'", "''")}'
+          where id = '${ids.noteFiled}' returning content_text`,
+    expect: passes((rows) =>
+      rows[0]?.content_text === richNote.text ? null : `got ${JSON.stringify(rows[0]?.content_text)}`,
+    ),
   },
 ]
 

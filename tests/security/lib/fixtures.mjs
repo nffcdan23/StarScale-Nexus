@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 // Made-up people and records used by every security check. Each check loads
 // them inside a transaction that is rolled back, so nothing is left behind.
 
@@ -23,6 +25,13 @@ export const ids = {
 
 /** Text in a note's body that must never reach the TV. */
 export const secretNoteBody = 'SECRET-NOTE-BODY'
+
+/**
+ * A note using every approved editor format, exactly as the editor saves it,
+ * with the plain text the database must derive from it. Also used by the
+ * editor tests in src/features/notes/editor.
+ */
+export const richNote = JSON.parse(readFileSync(new URL('./rich-note.json', import.meta.url), 'utf8'))
 
 /** A one-paragraph note document, as the editor saves it. */
 export const noteDoc = (text) => JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })

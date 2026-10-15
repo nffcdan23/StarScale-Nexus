@@ -66,7 +66,8 @@ describe('Mission Control', () => {
     act(() => {
       vi.advanceTimersByTime(60_000)
     })
-    expect(screen.getByText('8:06 AM')).toBeTruthy()
+    // The clock redraws a moment after the minute changes; wait for it.
+    expect(await screen.findByText('8:06 AM')).toBeTruthy()
   })
 })
 

@@ -9,6 +9,7 @@
 import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { loadPg } from '../../../tools/windows/load-pg.mjs'
 import { projectRoot, realResultsPath } from '../lib/paths.mjs'
 import { runCases } from '../lib/run-cases.mjs'
 import { runApiChecks } from './api-checks.mjs'
@@ -39,12 +40,8 @@ function readConfig() {
 }
 
 async function connect(dbUrl) {
-  let pg
-  try {
-    pg = (await import('pg')).default
-  } catch {
-    throw new Error('The "pg" package is not installed. It is needed only for real Supabase checks.')
-  }
+  // Installed only on the Windows PC, in tools/windows.
+  const pg = loadPg()
   const client = new pg.Client({ connectionString: dbUrl })
   await client.connect()
   return {
