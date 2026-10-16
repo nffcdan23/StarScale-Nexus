@@ -87,6 +87,16 @@ export function AuthProvider({ service, configProblem = null, children }: AuthPr
         await reload()
       },
       recheck: () => reload(!signingOut.current),
+      accountDetails: () => require().accountDetails(),
+      async changePassword(currentPassword, newPassword) {
+        try {
+          await require().changePassword(currentPassword, newPassword)
+        } catch (error) {
+          // Read the sign-in again, so an ended session shows as ended.
+          if (error instanceof AuthError && error.reason === 'session-ended') await reload(!signingOut.current)
+          throw error
+        }
+      },
     }
   }, [service, reload])
 

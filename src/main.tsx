@@ -11,12 +11,12 @@ import { isDesktopApp } from './app/desktop/desktop'
 import { routes } from './app/routes'
 import { readSupabaseSettings } from './data/config'
 import { createSupabaseAuthService } from './data/supabaseAuth'
-import { createSupabaseClient } from './data/supabaseClient'
+import { createPasswordCheck, createSupabaseClient } from './data/supabaseClient'
 import { createSupabaseDataServices } from './data/supabaseData'
 
 const settings = readSupabaseSettings(import.meta.env)
 const client = settings.ok ? createSupabaseClient(settings.settings) : null
-const authService = client ? createSupabaseAuthService(client) : null
+const authService = client && settings.ok ? createSupabaseAuthService(client, createPasswordCheck(settings.settings)) : null
 const dataServices = client ? createSupabaseDataServices(client) : null
 const router = createBrowserRouter(routes)
 

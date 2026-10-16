@@ -3,6 +3,7 @@ import { MissionControlPage } from '../pages/mission-control/MissionControlPage'
 import { NotFoundPage } from '../pages/not-found/NotFoundPage'
 import { LazyNotesPage } from '../pages/notes/LazyNotesPage'
 import { ProjectsPage } from '../pages/projects/ProjectsPage'
+import { SettingsPage } from '../pages/settings/SettingsPage'
 import { SignInPage } from '../pages/sign-in/SignInPage'
 import { TasksPage } from '../pages/tasks/TasksPage'
 import { TvDashboardPage } from '../pages/tv/TvDashboardPage'
@@ -31,6 +32,9 @@ export const routes: RouteObject[] = [
             element: <LazyNotesPage />,
           },
           { path: 'projects', element: <ProjectsPage /> },
+          // Owner only, like every page here: the TV is sent to /tv, and an
+          // owner without an authenticator code to sign-in.
+          { path: 'settings', element: <SettingsPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

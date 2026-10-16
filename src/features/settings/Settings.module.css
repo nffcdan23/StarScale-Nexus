@@ -1,0 +1,128 @@
+/* Settings: the same glass, type and spacing as the rest of Nexus. */
+
+.intro {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.block {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.block + .block {
+  padding-top: var(--space-6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.subheading {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.muted {
+  max-width: 64ch;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* Label and value pairs */
+.facts {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.fact {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: baseline;
+  font-size: var(--text-sm);
+}
+
+.fact dt {
+  color: var(--text-tertiary);
+}
+
+.fact dd {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+p.fact {
+  display: block;
+  color: var(--text-primary);
+}
+
+.note {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.good {
+  color: var(--color-success);
+}
+
+.passwordForm {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 420px;
+}
+
+.hint {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.fieldProblem {
+  color: #fecaca;
+  font-size: var(--text-xs);
+}
+
+.success {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: var(--radius-md);
+  background: rgba(74, 222, 128, 0.08);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.successIcon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--color-success);
+}
+
+.submit {
+  justify-self: start;
+  margin-top: 0;
+  padding: 0 var(--space-6);
+}
+
+.textButton {
+  justify-self: start;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.textButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

@@ -56,8 +56,10 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Pinned to the bottom of the sidebar */
+/* Pinned to the bottom of the sidebar: Settings, then Sign out */
 .footer {
+  display: grid;
+  gap: var(--space-1);
   margin-top: auto;
   padding-top: var(--space-4);
   border-top: 1px solid rgba(255, 255, 255, 0.08);

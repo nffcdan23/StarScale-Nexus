@@ -36,6 +36,19 @@ export interface Enrolment {
 
 export type AuthEvent = 'signed-in' | 'signed-out' | 'changed'
 
+/** What Settings shows about the signed-in account. Never ids or tokens. */
+export interface AccountDetails {
+  email: string | null
+  /** The label the administrator set; it cannot be changed from the app. */
+  role: 'owner' | 'tv' | null
+  /** True once an authenticator app is set up and confirmed with a code. */
+  authenticatorVerified: boolean
+  /** When the authenticator was set up (ISO time), if it is. */
+  authenticatorAddedAt: string | null
+  /** True when this session passed the authenticator code (Supabase's aal2). */
+  sessionUsedCode: boolean
+}
+
 export interface AuthService {
   current(): Promise<AuthSnapshot>
   subscribe(listener: (event: AuthEvent) => void): () => void
@@ -44,13 +57,33 @@ export interface AuthService {
   startEnrolment(): Promise<Enrolment>
   finishEnrolment(factorId: string, code: string): Promise<void>
   signOut(): Promise<void>
+  /** Reads the signed-in account's details from Supabase. */
+  accountDetails(): Promise<AccountDetails>
+  /**
+   * Changes the signed-in account's own password, after checking the current
+   * one. Uses the account's own session: never an administrator key. The
+   * account's id, role and authenticator are not touched.
+   */
+  changePassword(currentPassword: string, newPassword: string): Promise<void>
 }
+
+/** Why a sign-in action failed, when the screen should react to the reason, not just show the message. */
+export type AuthFailure =
+  | 'wrong-password'
+  | 'same-password'
+  | 'weak-password'
+  | 'reauthentication-needed'
+  | 'session-ended'
+  | 'rate-limited'
 
 /** A failure whose message is already fit to show to the owner. */
 export class AuthError extends Error {
-  constructor(message: string) {
+  readonly reason: AuthFailure | null
+
+  constructor(message: string, reason: AuthFailure | null = null) {
     super(message)
     this.name = 'AuthError'
+    this.reason = reason
   }
 }
 

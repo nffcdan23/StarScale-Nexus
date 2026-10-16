@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { AuthSnapshot, Enrolment } from '../../data/auth'
+import type { AccountDetails, AuthSnapshot, Enrolment } from '../../data/auth'
 
 export type AuthState =
   | { phase: 'not-configured'; problem: string }
@@ -14,6 +14,9 @@ export interface AuthActions {
   startEnrolment(): Promise<Enrolment>
   finishEnrolment(factorId: string, code: string): Promise<void>
   signOut(): Promise<void>
+  accountDetails(): Promise<AccountDetails>
+  /** Changes the signed-in account's own password; if the session has ended, the app shows that it has. */
+  changePassword(currentPassword: string, newPassword: string): Promise<void>
   /**
    * Reads the sign-in again, for when the database refuses a request. If the
    * session has quietly ended, the app shows that it has.

@@ -1,4 +1,4 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { useAuth } from '../../app/auth/authContext'
 import { brand } from '../../app/brand'
@@ -9,8 +9,8 @@ import styles from './Sidebar.module.css'
 
 /**
  * The desktop sidebar: brand at the top, then the sections listed in
- * navigation.ts. onSignOut replaces the plain sign-out, so the page can
- * first look after unsaved work.
+ * navigation.ts, and at the bottom Settings and Sign out. onSignOut replaces
+ * the plain sign-out, so the page can first look after unsaved work.
  */
 export function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
   const { actions } = useAuth()
@@ -46,6 +46,10 @@ export function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
       </nav>
 
       <div className={styles.footer}>
+        <NavLink to="/settings" className={styles.item} data-label="Settings">
+          <Settings className={styles.icon} aria-hidden="true" />
+          <span className={styles.label}>Settings</span>
+        </NavLink>
         <button
           type="button"
           className={styles.item}

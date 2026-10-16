@@ -433,6 +433,34 @@ plain English, define technical terms, and go one step at a time.
   (context "Fictional test"); the restore only goes into an empty project,
   so 4b-4 must decide how to clear them, with the owner's approval.
 
+## Settings (owner request, 17 October 2026)
+
+- `/settings` (owner only, behind RequireOwner like every desktop page: the
+  TV goes to /tv, an owner without a code to sign-in). Sidebar entry in the
+  footer, directly above Sign out. Sections in the address
+  (`?section=security|preferences|privacy|about`, default My Account):
+  `src/pages/settings/`, `src/features/settings/`.
+- Shows only what is real: email, fixed role, whether this session used the
+  authenticator code, authenticator status and date, database (cloud project
+  id shortened) and app kind, unsaved-draft count, version from
+  package.json (only `version` is built in). Never account ids, factor ids
+  or tokens. Preferences has no controls until something can genuinely be
+  applied. No delete or reset actions.
+- Password change uses the account's own session only (never an admin key):
+  `AuthService.changePassword` first checks the current password on a
+  separate in-memory Supabase connection (`createPasswordCheck`, ends its
+  session at once), then `auth.updateUser({ password, current_password })`.
+  Rules: 12 characters to 72 bytes, no edge spaces, differs from current,
+  confirmed. Supabase refusals map to reasons (wrong, same, weak with
+  reasons, reauthentication needed: sign out and in again, session ended:
+  recheck shows "session ended", rate limited). Passwords live only in the
+  form and are cleared after every attempt that reaches Supabase.
+- Authenticator: status only. Replacing or removing it in the app is not
+  built yet (stated on screen).
+- The client-side current-password check is a UI safeguard; Supabase
+  enforces it only if the project requires the current password or recent
+  sign-in for password changes (dashboard setting, owner's choice).
+
 ## Before each commit
 
 - Check `git status` for unrelated or sensitive files. `.env` files, keys,
