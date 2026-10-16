@@ -23,10 +23,12 @@
     "backup:verify": "node scripts/backup/verify-backup.mjs",
     "cloud:status": "node scripts/cloud/status.mjs",
     "cloud:migrate": "node scripts/cloud/migrate.mjs",
+    "cloud:account": "node scripts/cloud/account.mjs",
     "setup:windows": "node tools/windows/setup.mjs",
     "supabase": "node tools/windows/supabase.mjs",
     "tauri": "node tools/windows/tauri.mjs",
-    "desktop:build": "node tools/windows/tauri.mjs build"
+    "desktop:build:cloud": "node tools/windows/desktop-build.mjs cloud",
+    "desktop:build:local": "node tools/windows/desktop-build.mjs local"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",

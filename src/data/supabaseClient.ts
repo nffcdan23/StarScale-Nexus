@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { SupabaseSettings } from './config'
+import { authStorageKey } from './environment'
 
 /**
  * The one Supabase connection the app uses. It holds only the publishable
@@ -12,6 +13,8 @@ export function createSupabaseClient({ url, publishableKey }: SupabaseSettings) 
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      // One session per database: local and cloud sign-ins never share one.
+      storageKey: authStorageKey(url),
     },
   })
 }

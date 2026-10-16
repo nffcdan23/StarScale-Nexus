@@ -12,11 +12,11 @@
 // with its role (for choosing screens) and registered in private.identities,
 // which is what the database rules actually check.
 
-import { randomInt } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadPg } from '../tools/windows/load-pg.mjs'
+import { generatePassword } from './lib/passwords.mjs'
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -59,15 +59,6 @@ function readArguments(argv) {
     options[name.slice(2)] = rest[index + 1]
   }
   return { command, options }
-}
-
-/** About 124 bits of randomness, in groups that are easy to type on a TV keyboard. */
-function generatePassword() {
-  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
-  const groups = Array.from({ length: 5 }, () =>
-    Array.from({ length: 5 }, () => alphabet[randomInt(alphabet.length)]).join(''),
-  )
-  return groups.join('-')
 }
 
 async function adminCall(settings, path, { method = 'GET', body } = {}) {

@@ -62,7 +62,7 @@ plain English, define technical terms, and go one step at a time.
   to run anywhere but Windows. Never install anything into `tools/windows` on
   the Mac; update its lockfile only with `--package-lock-only`.
 - The Tauri command-line tool is also Windows-only (`tools/windows`): `npm run
-  tauri -- <command>` and `npm run desktop:build` (see Desktop app).
+  tauri -- <command>` and `npm run desktop:build:cloud|local` (see Desktop app).
 
 ## Security tests
 
@@ -107,7 +107,9 @@ plain English, define technical terms, and go one step at a time.
   code; the TV signs in with a password only and stays signed in.
 - Accounts are created only with `npm run account -- owner|tv|list` on the
   Windows PC (`scripts/setup-account.mjs`, refuses any other computer or a
-  non-local stack). It prints a random password once.
+  non-local stack). It prints a random password once. Cloud sign-ins:
+  `npm run cloud:account -- owner|tv --email ADDRESS | list` (see Cloud
+  migration and backups).
 - Mac tests use the fake service in `src/test/fakeAuth.ts`; they prove the
   screens, not Supabase. Real sign-in is checked on the PC.
 
@@ -295,12 +297,24 @@ plain English, define technical terms, and go one step at a time.
   single-instance 2.5.2, window-state 2.5.0; JS `@tauri-apps/api` 2.12.1 and
   `@tauri-apps/plugin-opener` 2.7.0 (main manifest, plain JS); CLI 2.12.1 in
   `tools/windows`. `Cargo.lock` comes from the first PC build and is committed.
-- Permanent: product name "StarScale Nexus", identifier
-  `uk.co.starscale.nexus`, window `useHttpsScheme: false`. The app's origin is
-  http://tauri.localhost; localStorage (sign-in session, note drafts) is kept
-  per origin under %LOCALAPPDATA%\uk.co.starscale.nexus. Changing either
-  setting orphans them. The app's storage is separate from Chrome's, and
-  `tauri dev` (origin http://localhost:5180) is separate again.
+- Two apps from one code base (3c-4b-3, `tools/windows/desktop-variants.mjs`),
+  built only with `npm run desktop:build:cloud` or `npm run desktop:build:local`
+  (`npm run tauri -- build` is refused):
+  - cloud: "StarScale Nexus Cloud", identifier `uk.co.starscale.nexus.cloud`,
+    window title "StarScale Nexus", connect-src only its
+    `https://<project id>.supabase.co`, built from `.env.cloud.local`;
+  - local: "StarScale Nexus", identifier `uk.co.starscale.nexus` (the app
+    installed in 3c-4a, so its sign-in and drafts carry on), window title
+    "StarScale Nexus (Local)", connect-src only the local stack, built from
+    `.env.local`.
+  The wrapper merges these over `tauri.conf.json` (`--config`), which stays
+  the local/development configuration. They install side by side, run at
+  the same time and keep separate storage.
+- Permanent per app: product name, identifier, and window `useHttpsScheme:
+  false`. The origin is http://tauri.localhost; localStorage (sign-in
+  session, note drafts) lives under %LOCALAPPDATA%\<identifier>. Changing any
+  of them orphans that app's sign-in and drafts. App storage is separate from
+  Chrome's, and `tauri dev` (origin http://localhost:5180) is separate again.
 - Security: one capability (`capabilities/main-window.json`) allowing only
   `opener:allow-open-url` for http, https and mailto. A Rust navigation guard
   keeps the window on the app's own pages; `src/app/desktop/externalLinks.ts`
@@ -309,12 +323,17 @@ plain English, define technical terms, and go one step at a time.
   unsafe-eval, connect-src limited to IPC and the local Supabase stack;
   `freezePrototype` on. Tauri adds nonces/hashes to the CSP, so inline styles
   cannot be allowed: TipTap's style tag is off (`editorOptions`) and its rules
-  live in `editor/editorBase.css`. `desktopConfig.test.ts` guards all of this.
-  `tools/windows/tauri.mjs` refuses a build whose .env.local Supabase address
-  is not in connect-src, and makes the icons from `src-tauri/app-icon.svg`.
-- Installer: per-user NSIS (Start menu entry; desktop shortcut via the
-  finish-page box). Not code-signed: Windows may warn (SmartScreen, unknown
-  publisher). Updates: rebuild and reinstall for now.
+  live in `editor/editorBase.css`. `desktopConfig.test.ts` and
+  `tests/desktop/` guard all of this. The build gives the app only
+  VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (every other VITE_
+  setting removed) and `scripts/check-bundle.mjs` fails unless the built app
+  contains exactly the expected Supabase address (`NEXUS_EXPECTED_SUPABASE_URL`)
+  and no other; any build fails if it contains two. Icons are made from
+  `src-tauri/app-icon.svg` on the first build.
+- Installer: per-user NSIS (Start menu entry in the "StarScale Nexus" folder;
+  desktop shortcut via the finish-page box). Not code-signed: Windows may
+  warn (SmartScreen, unknown publisher). Updates: rebuild and reinstall; it
+  keeps the app's data unless "Delete the application data" is ticked.
 - The TV stays in a browser kiosk profile, not the desktop app.
 
 ## Cloud migration and backups (Phase 3c-4b)
@@ -385,8 +404,28 @@ plain English, define technical terms, and go one step at a time.
   the downloaded CA, whether `db push --db-url` honours PGPASSWORD and
   PGSSLMODE, whether the cloud accepts `@example.test` test emails and
   `session_replication_role` for postgres. The first PC run decides.
-- `npm run test:tools` (backup and cloud tools, fictional data and fakes
-  only) is part of `npm run check`.
+- `npm run test:tools` (backup, cloud and desktop-build tools, fictional data
+  and fakes only) is part of `npm run check`.
+- Environments in the app (4b-3, `src/data/environment.ts`): the Supabase
+  address decides local (`http://127.0.0.1:54321` or `localhost:54321`) or
+  cloud (`https://<20 characters>.supabase.co`); `config.ts` refuses any
+  other address, and a cloud project must use an `sb_publishable_` key. The
+  sign-in session key is stated explicitly (`sb-127-auth-token` local,
+  `sb-<project id>-auth-token` cloud, as supabase-js would choose). Note
+  drafts keep the prefix `nexus.noteDraft.v1:` for local and use
+  `nexus.noteDraft.v1@<project id>:` for a cloud project, so neither build
+  lists, restores or removes the other's drafts.
+- Cloud sign-ins (4b-3): `npm run cloud:account -- owner|tv --email ADDRESS
+  | list` (`scripts/cloud/account.mjs`, rules in `accounts.mjs`). Refuses
+  unless `tests/security/cloud/results.json` shows every check passed for
+  this project and these migrations, all migrations are applied and there
+  are no stray accounts. Exactly one owner; a TV belongs to it. Database
+  password and a temporary secret key typed hidden, project id typed to
+  confirm, random password shown once. New ids; nothing copied from local;
+  the owner enrols a new authenticator on first sign-in. Never during builds.
+- Fictional records made while testing 4b-3 stay in the cloud project
+  (context "Fictional test"); the restore only goes into an empty project,
+  so 4b-4 must decide how to clear them, with the owner's approval.
 
 ## Before each commit
 
@@ -518,14 +557,17 @@ implement any of these until the owner asks.
 - 3c-4a Desktop shell (Tauri 2 window, single instance, remembered window,
   links to the default browser, strict CSP, NSIS installer): written on the
   Mac 16 October 2026. The owner reports it compiled, installed and working
-  on the PC (sign-in, Mission Control, Notes); the PC's `Cargo.lock` has not
-  yet reached this repository.
+  on the PC (sign-in, Mission Control, Notes); `Cargo.lock` committed from
+  the PC.
 - 3c-4b-1 Local backup and proven restore (PGlite): verified on the PC
   (17 tests, a real local backup made and verified).
 - 3c-4b-2 Cloud connection tooling, migrations, cloud security checks and
-  restore drill: built on the Mac 16 October 2026; awaiting the owner's run
-  on the PC (`docs/cloud-setup.md`). Next: 3c-4b-3, only with the owner's
-  approval.
+  restore drill: verified on the PC 16 October 2026 (4 migrations applied,
+  111 of 111 cloud checks, project empty afterwards, PostgreSQL 17.11).
+- 3c-4b-3 Cloud desktop app, local/cloud environments, cloud sign-in tool:
+  built on the Mac 16 October 2026; awaiting the owner's build, install and
+  checks on the PC (`docs/cloud-desktop.md`). Next: 3c-4b-4 (transfer of
+  real data), only with the owner's approval.
 - Go live at £0: the owner has created the Supabase Cloud project (16 October
   2026).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,

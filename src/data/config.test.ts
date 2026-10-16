@@ -11,7 +11,24 @@ function jwtWithRole(role: string) {
 describe('readSupabaseSettings', () => {
   it('accepts an address and a publishable key', () => {
     const result = readSupabaseSettings({ VITE_SUPABASE_URL: `${url}/`, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_abc' })
-    expect(result).toEqual({ ok: true, settings: { url, publishableKey: 'sb_publishable_abc' } })
+    expect(result).toEqual({ ok: true, settings: { url, publishableKey: 'sb_publishable_abc', environment: { kind: 'local' } } })
+  })
+
+  it('accepts a cloud project with its publishable key, and knows it is the cloud', () => {
+    const cloud = 'https://abcdefghijklmnopqrst.supabase.co'
+    const result = readSupabaseSettings({ VITE_SUPABASE_URL: cloud, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_abc' })
+    expect(result).toEqual({
+      ok: true,
+      settings: { url: cloud, publishableKey: 'sb_publishable_abc', environment: { kind: 'cloud', projectRef: 'abcdefghijklmnopqrst' } },
+    })
+    expect(readSupabaseSettings({ VITE_SUPABASE_URL: cloud, VITE_SUPABASE_PUBLISHABLE_KEY: jwtWithRole('anon') }).ok).toBe(false)
+  })
+
+  it('refuses any address that is not the local stack or a cloud project', () => {
+    for (const other of ['https://example.com', 'http://127.0.0.1:3000', 'https://abc.supabase.co']) {
+      const result = readSupabaseSettings({ VITE_SUPABASE_URL: other, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_abc' })
+      expect(result.ok, other).toBe(false)
+    }
   })
 
   it('reports missing settings', () => {

@@ -26,23 +26,25 @@ const POOLER_HOST = /^aws-\d+-[a-z]{2}-[a-z]+-\d+\.pooler\.supabase\.com$/
 /** A problem the owner should read: the message is plain English. */
 export class CloudProblem extends Error {}
 
-/**
- * Checks the cloud settings and returns everything the tools need to reach
- * exactly one project. Throws a CloudProblem naming the setting to fix.
- */
-export function cloudSettings(env, { caText, caPath = null }) {
-  const projectRef = (env.NEXUS_CLOUD_PROJECT_REF ?? '').trim()
-  const publishableKey = (env.NEXUS_CLOUD_PUBLISHABLE_KEY ?? '').trim()
-  const dbHost = (env.NEXUS_CLOUD_DB_HOST ?? '').trim()
-
-  const missing = [
-    ['NEXUS_CLOUD_PROJECT_REF', projectRef],
-    ['NEXUS_CLOUD_PUBLISHABLE_KEY', publishableKey],
-    ['NEXUS_CLOUD_DB_HOST', dbHost],
-  ].filter(([, value]) => !value)
+function missingSettings(entries) {
+  const missing = entries.filter(([, value]) => !value)
   if (missing.length > 0) {
     throw new CloudProblem(`${SETTINGS_FILE} is missing: ${missing.map(([name]) => name).join(', ')}. See .env.cloud.example.`)
   }
+}
+
+/**
+ * The two public values the cloud desktop app is built with: the project's
+ * address, worked out from its id, and its publishable key. Throws a
+ * CloudProblem naming the setting to fix.
+ */
+export function cloudAppSettings(env) {
+  const projectRef = (env.NEXUS_CLOUD_PROJECT_REF ?? '').trim()
+  const publishableKey = (env.NEXUS_CLOUD_PUBLISHABLE_KEY ?? '').trim()
+  missingSettings([
+    ['NEXUS_CLOUD_PROJECT_REF', projectRef],
+    ['NEXUS_CLOUD_PUBLISHABLE_KEY', publishableKey],
+  ])
 
   if (!PROJECT_REF.test(projectRef)) {
     throw new CloudProblem(
@@ -63,6 +65,21 @@ export function cloudSettings(env, { caText, caPath = null }) {
   if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(publishableKey)) {
     throw new CloudProblem('NEXUS_CLOUD_PUBLISHABLE_KEY must be the publishable key, which starts sb_publishable_.')
   }
+  return { projectRef, apiUrl: `https://${projectRef}.supabase.co`, publishableKey }
+}
+
+/**
+ * Checks the cloud settings and returns everything the tools need to reach
+ * exactly one project. Throws a CloudProblem naming the setting to fix.
+ */
+export function cloudSettings(env, { caText, caPath = null }) {
+  const dbHost = (env.NEXUS_CLOUD_DB_HOST ?? '').trim()
+  missingSettings([
+    ['NEXUS_CLOUD_PROJECT_REF', (env.NEXUS_CLOUD_PROJECT_REF ?? '').trim()],
+    ['NEXUS_CLOUD_PUBLISHABLE_KEY', (env.NEXUS_CLOUD_PUBLISHABLE_KEY ?? '').trim()],
+    ['NEXUS_CLOUD_DB_HOST', dbHost],
+  ])
+  const { projectRef, apiUrl, publishableKey } = cloudAppSettings(env)
   if (!POOLER_HOST.test(dbHost)) {
     throw new CloudProblem(
       'NEXUS_CLOUD_DB_HOST must be the session pooler host only, for example aws-0-eu-west-2.pooler.supabase.com ' +
@@ -81,7 +98,7 @@ export function cloudSettings(env, { caText, caPath = null }) {
 
   return {
     projectRef,
-    apiUrl: `https://${projectRef}.supabase.co`,
+    apiUrl,
     publishableKey,
     db: { host: dbHost, port: 5432, user: `postgres.${projectRef}`, database: 'postgres' },
     ca: caText,

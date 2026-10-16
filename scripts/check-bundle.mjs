@@ -1,6 +1,9 @@
 // Runs after every build. Fails if the built app could leak a secret: a
 // Supabase secret key, a service-role token, administrator script code, or
-// any browser setting other than the two that are public by design.
+// any browser setting other than the two that are public by design. Also
+// fails if the app could reach more than one Nexus database: it may contain
+// at most one Supabase address, and a desktop build (which names the address
+// it is for in NEXUS_EXPECTED_SUPABASE_URL) must contain exactly that one.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -50,9 +53,13 @@ if (!existsSync(distDir)) {
     }
   }
 
+  const supabaseAddresses = new Set()
   for (const file of files) {
     const text = readFileSync(file, 'utf8')
     const where = relative(projectRoot, file)
+    for (const match of text.matchAll(/https:\/\/[a-z0-9]{20}\.supabase\.co|http:\/\/(?:127\.0\.0\.1|localhost):54321/g)) {
+      supabaseAddresses.add(match[0])
+    }
     if (/sb_secret_[A-Za-z0-9_-]{8,}/.test(text)) problems.push(`${where} contains a Supabase secret key`)
     for (const token of text.match(/eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g) ?? []) {
       if (isServiceRoleToken(token)) problems.push(`${where} contains a service-role token`)
@@ -61,6 +68,16 @@ if (!existsSync(distDir)) {
       problems.push(`${where} contains administrator script code`)
     }
   }
+  const expected = process.env.NEXUS_EXPECTED_SUPABASE_URL
+  if (expected && !supabaseAddresses.has(expected)) {
+    problems.push(`the app does not contain ${expected}, the Supabase address this build is for`)
+  }
+  for (const address of supabaseAddresses) {
+    if (expected ? address !== expected : supabaseAddresses.size > 1) {
+      problems.push(`the app contains ${address}${expected ? `, but this build is for ${expected}` : ' and another Supabase address'}`)
+    }
+  }
+
   // 3. The note editor (TipTap and ProseMirror) must load only when Notes is
   // opened, never as part of the first download that every page, the TV
   // included, makes. The first download is the entry script in index.html
@@ -78,7 +95,8 @@ if (!existsSync(distDir)) {
 
   if (problems.length === 0) {
     console.log(
-      `Bundle check: ${files.length} built files checked, no secrets found; ` +
+      `Bundle check: ${files.length} built files checked, no secrets found, ` +
+        `Supabase address ${[...supabaseAddresses].join(', ') || 'not set'}; ` +
         `first download ${(startupBytes / 1024).toFixed(0)} KB with no note editor code.`,
     )
   }

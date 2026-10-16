@@ -1,6 +1,9 @@
+import { environmentOf, type NexusEnvironment } from './environment'
+
 export interface SupabaseSettings {
   url: string
   publishableKey: string
+  environment: NexusEnvironment
 }
 
 export type SettingsResult =
@@ -20,7 +23,8 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 /**
  * Reads the two values the browser is allowed to know: the Supabase address
  * and its publishable key. Refuses anything that looks like a secret key, so
- * a mistake in a settings file cannot put one into the app.
+ * a mistake in a settings file cannot put one into the app, and any address
+ * other than the local stack or a Supabase Cloud project.
  */
 export function readSupabaseSettings(env: Record<string, unknown>): SettingsResult {
   const url = typeof env.VITE_SUPABASE_URL === 'string' ? env.VITE_SUPABASE_URL.trim() : ''
@@ -50,5 +54,17 @@ export function readSupabaseSettings(env: Record<string, unknown>): SettingsResu
     }
   }
 
-  return { ok: true, settings: { url: url.replace(/\/$/, ''), publishableKey: key } }
+  const environment = environmentOf(url)
+  if (!environment) {
+    return {
+      ok: false,
+      problem:
+        'VITE_SUPABASE_URL must be the local Supabase stack (port 54321 on this computer) or a Supabase Cloud project address.',
+    }
+  }
+  if (environment.kind === 'cloud' && !key.startsWith('sb_publishable_')) {
+    return { ok: false, problem: 'The cloud project needs its publishable key (sb_publishable_...).' }
+  }
+
+  return { ok: true, settings: { url: url.replace(/\/$/, ''), publishableKey: key, environment } }
 }

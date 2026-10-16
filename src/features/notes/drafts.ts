@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { currentEnvironment, type NexusEnvironment } from '../../data/environment'
 import { limits, type NoteDoc } from '../../data/types'
 
 // Unsaved note changes kept in this browser (localStorage) until the
@@ -38,7 +39,18 @@ export interface NoteDraft {
   writer?: string
 }
 
-const PREFIX = 'nexus.noteDraft.v1:'
+/**
+ * Drafts are filed per database (Phase 3c-4b-3). The local stack keeps the
+ * original prefix, so drafts made before cloud builds existed stay exactly
+ * where they are; a cloud project files them under its own id. Neither
+ * prefix starts the other, so a draft made against one database is never
+ * listed, restored or removed by a build for the other.
+ */
+export function draftPrefix(environment: NexusEnvironment): string {
+  return environment.kind === 'local' ? 'nexus.noteDraft.v1:' : `nexus.noteDraft.v1@${environment.projectRef}:`
+}
+
+const PREFIX = draftPrefix(currentEnvironment)
 
 /** Storage key: owner, note, and for held versions ":held:<heldId>" (":held" before Phase 3c-3). */
 function keyFor(draft: Pick<NoteDraft, 'ownerId' | 'noteId' | 'held' | 'heldId'>) {

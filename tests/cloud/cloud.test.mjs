@@ -462,3 +462,50 @@ describe('the Mac never reaches the cloud project', () => {
     }
   })
 })
+
+describe('cloud sign-ins (Phase 3c-4b-3)', () => {
+  const owner = { userId: 'o0000000-0000-4000-8000-000000000001', kind: 'owner', email: 'owner@example.test' }
+
+  it('are refused until the recorded cloud checks all passed, for this project and these migrations', async () => {
+    const { verificationProblem } = await import('../../scripts/cloud/accounts.mjs')
+    const expectedIds = ['ACC-01', 'CLOUD-01']
+    const recorded = {
+      project: shortRef(REF),
+      fingerprint: 'f1',
+      results: expectedIds.map((id) => ({ id, status: 'passed', detail: '' })),
+    }
+    const check = (results, fingerprint = 'f1') => verificationProblem(results, { fingerprint, projectRef: REF, expectedIds })
+    expect(check(recorded)).toBeNull()
+    expect(check(null)).toMatch(/have not been recorded/)
+    expect(check({ ...recorded, project: 'zzzz…zzzz' })).toMatch(/for project zzzz…zzzz/)
+    expect(check(recorded, 'f2')).toMatch(/migrations have changed/)
+    expect(check({ ...recorded, results: [recorded.results[0]] })).toMatch(/not every recorded cloud check passed \(CLOUD-01\)/)
+    expect(check({ ...recorded, results: [recorded.results[0], { id: 'CLOUD-01', status: 'failed' }] })).toMatch(/CLOUD-01/)
+  })
+
+  it('allow exactly one owner, then TVs that show that owner', async () => {
+    const { accountPlan } = await import('../../scripts/cloud/accounts.mjs')
+    expect(accountPlan('owner', { email: ' Owner@Example.test ', registered: [], accounts: 0 })).toEqual({
+      email: 'owner@example.test',
+      ownerId: null,
+    })
+    expect(accountPlan('owner', { email: 'second@example.test', registered: [owner], accounts: 1 }).problem).toMatch(
+      /already exists \(owner@example\.test\)/,
+    )
+    expect(accountPlan('tv', { email: 'tv@example.test', registered: [], accounts: 0 }).problem).toMatch(/create the owner/)
+    expect(accountPlan('tv', { email: 'tv@example.test', registered: [owner], accounts: 1 })).toEqual({
+      email: 'tv@example.test',
+      ownerId: owner.userId,
+    })
+    expect(accountPlan('tv', { email: 'OWNER@example.test', registered: [owner], accounts: 1 }).problem).toMatch(/already has a Nexus sign-in/)
+  })
+
+  it('refuse while stray accounts exist, and refuse a bad address', async () => {
+    const { accountPlan } = await import('../../scripts/cloud/accounts.mjs')
+    expect(accountPlan('owner', { email: 'owner@example.test', registered: [], accounts: 1 }).problem).toMatch(/not Nexus sign-ins/)
+    expect(accountPlan('tv', { email: 'tv@example.test', registered: [owner], accounts: 2 }).problem).toMatch(/not Nexus sign-ins/)
+    for (const email of ['', 'owner', 'owner@', 'a b@example.test', undefined]) {
+      expect(accountPlan('owner', { email, registered: [], accounts: 0 }).problem, String(email)).toMatch(/valid --email/)
+    }
+  })
+})

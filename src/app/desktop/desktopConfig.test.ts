@@ -4,7 +4,10 @@ import config from '../../../src-tauri/tauri.conf.json'
 import project from '../../../package.json'
 
 // The desktop app's settings that must never drift. The app itself is built
-// and tested on the Windows PC; these checks run on any machine.
+// and tested on the Windows PC; these checks run on any machine. This is the
+// committed configuration, which the local app and `tauri dev` use as it is;
+// the cloud app's name, identifier and connect-src are merged over it at
+// build time and checked in tests/desktop/desktop.test.mjs.
 
 const policy = (csp: Record<string, string>) =>
   Object.fromEntries(Object.entries(csp).map(([directive, sources]) => [directive, sources.split(/\s+/)]))

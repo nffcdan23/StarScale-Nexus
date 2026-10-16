@@ -177,4 +177,5 @@ the key's menu → Delete). A new one can be made whenever it is needed again.
 |---|---|
 | `npm run cloud:status` | No. Read-only connection |
 | `npm run cloud:migrate` | Yes, only after you type the project id: adds the missing migrations, in order. Never resets, never adds seed data, refuses any migration that would delete or change stored data |
+| `npm run cloud:account -- owner\|tv --email ADDRESS` | Yes, only after you type the project id, and only once the cloud checks are recorded as passed: creates one sign-in (Phase 3c-4b-3, `docs/cloud-desktop.md`). `list` changes nothing |
 | `npm run test:security:cloud` | Only temporarily, only after you type the project id, and only on an empty project: test accounts and made-up records that the run removes. Access checks and the restore drill are undone |
