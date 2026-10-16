@@ -6,6 +6,7 @@
 // an environment variable.
 
 import { createInterface } from 'node:readline/promises'
+import { newPasswordProblem } from './accounts.mjs'
 import { CloudProblem } from './settings.mjs'
 
 /** Asks for a secret without showing it. Enter finishes; Ctrl+C stops. */
@@ -54,6 +55,16 @@ export async function askSecretKey(io) {
   }
   if (!key.startsWith('sb_secret_')) throw new CloudProblem('That is not a secret key (they start sb_secret_). Nothing was changed.')
   return key
+}
+
+/** A new sign-in password, typed twice, hidden. Nothing is changed if it is unsuitable or the two differ. */
+export async function askNewPassword(io) {
+  const password = await askHidden('New password', io)
+  const problem = newPasswordProblem(password)
+  if (problem) throw new CloudProblem(`${problem} Nothing was changed.`)
+  const again = await askHidden('Type the new password again', io)
+  if (again !== password) throw new CloudProblem('The two passwords did not match. Nothing was changed.')
+  return password
 }
 
 /**

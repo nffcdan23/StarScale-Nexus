@@ -85,6 +85,22 @@ time (needs only the database password):
 npm run cloud:account -- list
 ```
 
+## Changing a sign-in's password
+
+Use this if a password has been exposed (for example in a screenshot) or you
+want one of your own. It keeps the account, its role and its authenticator;
+it does not use the password-reset email. Create a temporary secret key in the
+dashboard first, then:
+
+```
+npm run cloud:account -- password --email you@example.com
+```
+
+Type the database password, paste the secret key, type the project id to
+confirm, then type the new password twice (nothing shows; at least 12
+characters). The old password stops working at once. Save the new one in your
+password manager, then delete the temporary secret key.
+
 ## 6. Check Mission Control, Tasks and Notes (fictional records)
 
 In StarScale Nexus Cloud, signed in as the owner:

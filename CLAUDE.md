@@ -423,6 +423,12 @@ plain English, define technical terms, and go one step at a time.
   password and a temporary secret key typed hidden, project id typed to
   confirm, random password shown once. New ids; nothing copied from local;
   the owner enrols a new authenticator on first sign-in. Never during builds.
+  `npm run cloud:account -- password --email ADDRESS` replaces an existing
+  sign-in's password through the Auth admin API (PUT admin/users/<id>,
+  body only the password): typed twice in the hidden prompt, 12 characters
+  to 72 bytes, never printed or on the command line; id, role and
+  authenticator kept; no recovery email; not held up by the verification
+  gate.
 - Fictional records made while testing 4b-3 stay in the cloud project
   (context "Fictional test"); the restore only goes into an empty project,
   so 4b-4 must decide how to clear them, with the owner's approval.

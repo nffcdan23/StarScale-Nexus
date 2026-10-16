@@ -3,6 +3,7 @@
 //
 //   npm run cloud:account -- owner --email you@example.com
 //   npm run cloud:account -- tv --email office-tv@example.com
+//   npm run cloud:account -- password --email you@example.com
 //   npm run cloud:account -- list
 //
 // Windows PC only. Refuses unless the recorded cloud security checks all
@@ -13,29 +14,28 @@
 // local database: the cloud sign-ins are new, with new ids, and the owner
 // sets up a new authenticator on first sign-in. The password is random and
 // shown once. `list` needs only the database password and changes nothing.
+//
+// `password` replaces the password of an existing Nexus sign-in, for example
+// one that has been exposed. The new password is typed twice into a hidden
+// prompt and goes only to Supabase's Auth admin API: it is never shown,
+// logged, saved or taken from the command line. The account keeps its id,
+// role and authenticator. It needs the database password (to find the
+// sign-in), a temporary secret key and the project id typed to confirm.
+// It creates and deletes nothing, and changes no database table.
 
 import { loadMigrations, fingerprint } from '../../tests/security/lib/migrations.mjs'
 import { cases, cloudOnlyCases, realOnlyCases } from '../../tests/security/lib/cases.mjs'
 import { loadCloudResults } from '../../tests/security/lib/report.mjs'
 import { projectRoot, requireWindows } from '../../tools/windows/windows-only.mjs'
 import { generatePassword } from '../lib/passwords.mjs'
-import { accountPlan, verificationProblem } from './accounts.mjs'
+import { accountPlan, findSignIn, parseAccountArguments, setPassword, verificationProblem } from './accounts.mjs'
 import { checkKeys, connectCloud, migrationPlan, readProjectState } from './project.mjs'
-import { askDatabasePassword, askSecretKey, confirmProject } from './prompt.mjs'
+import { askDatabasePassword, askNewPassword, askSecretKey, confirmProject } from './prompt.mjs'
 import { CloudProblem, loadCloudSettings, redact } from './settings.mjs'
 
 function stop(message) {
   console.error(`\nStopped: ${message}\n`)
   process.exit(1)
-}
-
-function readArguments(argv) {
-  const [command, ...rest] = argv
-  if (command === 'list' && rest.length === 0) return { command }
-  if ((command === 'owner' || command === 'tv') && rest.length === 2 && rest[0] === '--email') {
-    return { command, email: rest[1] }
-  }
-  stop('use: npm run cloud:account -- owner --email ADDRESS | tv --email ADDRESS | list')
 }
 
 async function registeredSignIns(db) {
@@ -69,34 +69,60 @@ try {
 
 const secrets = []
 try {
-  const { command, email } = readArguments(process.argv.slice(2))
+  const { command, email, problem: usage } = parseAccountArguments(process.argv.slice(2))
+  if (usage) stop(usage)
   const settings = loadCloudSettings(projectRoot)
   const migrations = await loadMigrations()
 
-  // Before any secret is typed: the cloud project must be verified.
-  const problem = verificationProblem(await loadCloudResults(), {
-    fingerprint: fingerprint(migrations),
-    projectRef: settings.projectRef,
-    expectedIds: [...cases, ...realOnlyCases, ...cloudOnlyCases].map((testCase) => testCase.id),
-  })
-  if (problem) throw new CloudProblem(`the cloud project is not verified: ${problem}`)
+  // Before any secret is typed: the cloud project must be verified before it
+  // is given sign-ins. Changing an existing sign-in's password gives no new
+  // access, so it is never held up by this.
+  if (command !== 'password') {
+    const problem = verificationProblem(await loadCloudResults(), {
+      fingerprint: fingerprint(migrations),
+      projectRef: settings.projectRef,
+      expectedIds: [...cases, ...realOnlyCases, ...cloudOnlyCases].map((testCase) => testCase.id),
+    })
+    if (problem) throw new CloudProblem(`the cloud project is not verified: ${problem}`)
+  }
 
   console.log(`\nStarScale Nexus cloud sign-ins`)
-  console.log(`Project: ${settings.projectRef}  ${settings.apiUrl} (security checks recorded as passed)`)
+  console.log(`Project: ${settings.projectRef}  ${settings.apiUrl}`)
   await checkKeys(settings)
 
   const password = await askDatabasePassword()
   secrets.push(password)
-  const db = await connectCloud(settings, password, { readOnly: command === 'list' })
+  const db = await connectCloud(settings, password, { readOnly: command === 'list' || command === 'password' })
   try {
     const state = await readProjectState(db)
     const plan = migrationPlan(state.applied, migrations.map((migration) => migration.name.split('_')[0]))
-    if (plan.problem || plan.pending.length > 0) {
+    if (command !== 'password' && (plan.problem || plan.pending.length > 0)) {
       throw new CloudProblem('the cloud migrations are not all applied. Run npm run cloud:status. Nothing was created.')
     }
     const registered = await registeredSignIns(db)
 
-    if (command === 'list') {
+    if (command === 'password') {
+      const signIn = findSignIn(registered, email)
+      if (!signIn) throw new CloudProblem(`${email} is not a Nexus sign-in in this project. Nothing was changed.`)
+
+      const secretKey = await askSecretKey()
+      secrets.push(secretKey)
+      await checkKeys(settings, { secretKey })
+
+      const what = signIn.kind === 'owner' ? 'the OWNER sign-in' : 'the TV sign-in'
+      console.log(`\nThis replaces the password of ${what} ${signIn.email} in project ${settings.projectRef}.`)
+      console.log('Its id, role and authenticator stay as they are. Nothing is created or deleted.')
+      if (!(await confirmProject(settings.projectRef))) throw new CloudProblem('nothing was changed.')
+
+      console.log('\nChoose the new password (at least 12 characters). Nothing appears as you type or paste.')
+      const chosenPassword = await askNewPassword()
+      secrets.push(chosenPassword)
+      await setPassword({ settings, secretKey, userId: signIn.userId, password: chosenPassword })
+
+      console.log(`\nPassword changed for ${signIn.email}. The old password no longer works.`)
+      console.log('Save the new one in your password manager if you have not already. Sign in with it and your')
+      console.log('authenticator code. Then delete the temporary secret key in the dashboard.\n')
+    } else if (command === 'list') {
       if (registered.length === 0) console.log('No Nexus sign-ins yet.')
       for (const entry of registered) console.log(`  ${entry.kind.padEnd(5)} ${entry.email}`)
       const stray = state.counts.accounts - registered.length

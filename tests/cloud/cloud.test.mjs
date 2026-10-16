@@ -509,3 +509,110 @@ describe('cloud sign-ins (Phase 3c-4b-3)', () => {
     }
   })
 })
+
+describe('changing a cloud sign-in password (fictional accounts, fake Supabase)', () => {
+  const owner = { userId: 'o0000000-0000-4000-8000-000000000001', kind: 'owner', email: 'owner@example.test' }
+  const tv = { userId: 't0000000-0000-4000-8000-000000000002', kind: 'tv', email: 'tv@example.test' }
+  const chosen = 'Fictional-New-Passphrase-42'
+
+  it('takes the command and address only: never a password on the command line', async () => {
+    const { parseAccountArguments } = await import('../../scripts/cloud/accounts.mjs')
+    expect(parseAccountArguments(['password', '--email', 'owner@example.test'])).toEqual({ command: 'password', email: 'owner@example.test' })
+    for (const argv of [
+      ['password'],
+      ['password', '--email', 'owner@example.test', '--password', chosen],
+      ['password', '--password', chosen],
+      ['password', '--email', 'owner@example.test', chosen],
+    ]) {
+      expect(parseAccountArguments(argv).problem, argv.join(' ')).toMatch(/password --email ADDRESS/)
+    }
+  })
+
+  it('finds only a registered Nexus sign-in', async () => {
+    const { findSignIn } = await import('../../scripts/cloud/accounts.mjs')
+    expect(findSignIn([owner, tv], ' Owner@Example.test ')).toBe(owner)
+    expect(findSignIn([owner, tv], 'tv@example.test')).toBe(tv)
+    expect(findSignIn([owner, tv], 'someone@example.test')).toBeNull()
+  })
+
+  it('accepts a new password only when it is long enough, not too long and has no stray spaces', async () => {
+    const { newPasswordProblem } = await import('../../scripts/cloud/accounts.mjs')
+    expect(newPasswordProblem(chosen)).toBeNull()
+    expect(newPasswordProblem('short-pass1')).toMatch(/at least 12/)
+    expect(newPasswordProblem('é'.repeat(37))).toMatch(/at most 72 bytes/)
+    expect(newPasswordProblem('x'.repeat(72))).toBeNull()
+    expect(newPasswordProblem(` ${chosen}`)).toMatch(/space/)
+    expect(newPasswordProblem(`${chosen} `)).toMatch(/space/)
+  })
+
+  it('asks twice, hidden, and never shows it', async () => {
+    const { askNewPassword } = await import('../../scripts/cloud/prompt.mjs')
+    const { io, input, shown } = terminal()
+    const answer = askNewPassword(io)
+    input.write(`${chosen}\r`)
+    await new Promise((resolve) => setImmediate(resolve))
+    input.write(`${chosen}\r`)
+    await expect(answer).resolves.toBe(chosen)
+    expect(shown()).toContain('New password (typing is hidden)')
+    expect(shown()).toContain('Type the new password again (typing is hidden)')
+    expect(shown()).not.toContain(chosen)
+  })
+
+  it('changes nothing when the two entries differ or the password is unsuitable', async () => {
+    const { askNewPassword } = await import('../../scripts/cloud/prompt.mjs')
+    const mismatch = terminal()
+    const differing = askNewPassword(mismatch.io)
+    mismatch.input.write(`${chosen}\r`)
+    await new Promise((resolve) => setImmediate(resolve))
+    mismatch.input.write(`${chosen}x\r`)
+    await expect(differing).rejects.toThrow(/did not match\. Nothing was changed/)
+
+    const short = terminal()
+    const tooShort = askNewPassword(short.io)
+    short.input.write('short\r')
+    await expect(tooShort).rejects.toThrow(/at least 12 characters long\. Nothing was changed/)
+    expect(short.shown()).not.toContain('again')
+  })
+
+  it("sends only the new password to Supabase's admin API, for that account only", async () => {
+    const { setPassword } = await import('../../scripts/cloud/accounts.mjs')
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: owner.userId, email: owner.email }) }))
+    await setPassword({ settings, secretKey: 'sb_secret_FictionalValue', userId: owner.userId, password: chosen, fetchImpl })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const [url, request] = fetchImpl.mock.calls[0]
+    expect(url).toBe(`https://${REF}.supabase.co/auth/v1/admin/users/${owner.userId}`)
+    expect(request.method).toBe('PUT')
+    expect(request.headers.apikey).toBe('sb_secret_FictionalValue')
+    // Nothing else about the account is touched: no email, role, metadata or factors.
+    expect(JSON.parse(request.body)).toEqual({ password: chosen })
+  })
+
+  it('reports a refusal plainly, without the password', async () => {
+    const { setPassword } = await import('../../scripts/cloud/accounts.mjs')
+    const weak = async () => ({
+      ok: false,
+      status: 422,
+      json: async () => ({ error_code: 'weak_password', msg: 'Password is known to be weak', weak_password: { reasons: ['pwned'] } }),
+    })
+    const attempt = setPassword({ settings, secretKey: 'sb_secret_FictionalValue', userId: owner.userId, password: chosen, fetchImpl: weak })
+    await expect(attempt).rejects.toThrow(/status 422, weak_password: Password is known to be weak \(pwned\)\)\. The old password still works/)
+    await attempt.catch((error) => expect(error.message).not.toContain(chosen))
+
+    const offline = () => Promise.reject(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }))
+    await expect(
+      setPassword({ settings, secretKey: 'sb_secret_FictionalValue', userId: owner.userId, password: chosen, fetchImpl: offline }),
+    ).rejects.toThrow(/ENOTFOUND\)\. The password was not changed/)
+
+    const otherAccount = async () => ({ ok: true, status: 200, json: async () => ({ id: tv.userId }) })
+    await expect(
+      setPassword({ settings, secretKey: 'sb_secret_FictionalValue', userId: owner.userId, password: chosen, fetchImpl: otherAccount }),
+    ).rejects.toThrow(/different account/)
+  })
+
+  it('the command never prints the new password', async () => {
+    const source = await readFile(join(projectRoot, 'scripts', 'cloud', 'account.mjs'), 'utf8')
+    expect(source).not.toMatch(/console\.\w+\([^)]*chosenPassword/)
+    expect(source).toMatch(/secrets\.push\(chosenPassword\)/)
+    expect(source).not.toMatch(/process\.argv[^\n]*password/i)
+  })
+})
