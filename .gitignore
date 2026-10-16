@@ -21,6 +21,10 @@ id_rsa*
 id_ed25519*
 .claude/settings.local.json
 
+# Nexus backups: the owner's notes in readable form. Never committed.
+# See docs/backup-and-restore.md.
+backups/
+
 # Logs
 *.log
 npm-debug.log*

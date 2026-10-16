@@ -12,8 +12,10 @@ plain English, define technical terms, and go one step at a time.
 - Never modify Derwent, Veyra or any unrelated project.
 - Git stays local. Never add a remote, push, pull or otherwise interact with
   GitHub. The owner uploads checkpoints to their own private repository by hand.
-- No cloud yet: do not configure Supabase, deployment, cloud storage or any
-  hosted service until the owner approves that phase.
+- Cloud: the owner has created a Supabase Cloud project for Nexus (Phase
+  3c-4b). Only the Windows PC connects to it, only within an approved
+  checkpoint; the MacBook never does. No other hosted service (deployment,
+  cloud storage) until the owner approves that phase.
 - Ask before installing any dependency or system-level tool, and before
   changing any system setting.
 - No implementation without approval. For every major task: explain what and
@@ -274,19 +276,18 @@ plain English, define technical terms, and go one step at a time.
   fails if ProseMirror code reaches the startup download. Measured in 3b-1:
   the editor download is 393 KB (124 KB compressed); the startup download is
   unchanged at 597 KB (174 KB compressed).
-- Backups: before important notes are stored, 3e must give a tested backup
-  and restore. Keep two things apart: a full database backup (everything,
-  for disaster recovery, restored into a fresh database and compared) and a
-  note export (readable copies of notes, for the owner's own use).
+- Backups: built in Phase 3c-4b-1 (see Cloud migration and backups). A
+  readable note export for the owner's own use is still a separate, later
+  feature.
 - The written rules (`static-checks.mjs`) now cover functions with inputs
   and `create or replace`; before Phase 3a they silently skipped them.
 
 ## Desktop app (Phase 3c-4)
 
-- Plan approved 16 October 2026: Tauri 2. 3c-4a desktop shell; 3c-4b
-  automatic Docker and Supabase start-up (development builds only); 3c-4c
-  install and update routine; hosted-Supabase build at go-live. Each needs
-  its own go-ahead. Build and install steps: `docs/desktop-app.md`.
+- Plan approved 16 October 2026: Tauri 2. 3c-4a desktop shell; 3c-4c
+  install and update routine. Each needs its own go-ahead. Build and install
+  steps: `docs/desktop-app.md`. The planned automatic Docker start-up was
+  dropped: 3c-4b is now the cloud backend migration (next section).
 - `src-tauri/`: Rust written on the Mac, compiled and tested only on the PC.
   Keep it small. Exact pins: tauri 2.12.1, tauri-build 2.7.1, opener 2.7.0,
   single-instance 2.5.2, window-state 2.5.0; JS `@tauri-apps/api` 2.12.1 and
@@ -313,6 +314,47 @@ plain English, define technical terms, and go one step at a time.
   finish-page box). Not code-signed: Windows may warn (SmartScreen, unknown
   publisher). Updates: rebuild and reinstall for now.
 - The TV stays in a browser kiosk profile, not the desktop app.
+
+## Cloud migration and backups (Phase 3c-4b)
+
+- Plan approved 16 October 2026: the installed desktop app moves to the
+  owner's Supabase Cloud project; local Supabase stays for development,
+  migrations and security tests. Four checkpoints, each with its own
+  go-ahead: 4b-1 local backup and proven restore (no cloud); 4b-2 cloud
+  connection tooling, migrations, real security checks and a restore drill
+  on the still-empty project; 4b-3 separate local and cloud environments,
+  cloud desktop build, new owner and TV accounts with a fresh authenticator;
+  4b-4 transfer of the contexts the owner chooses, first cloud backup, go-live.
+- Agreed approach: connect with `--db-url` through the session pooler, never
+  `supabase login` or `supabase link`; the database password and secret key
+  are typed when needed and never saved, printed or pasted into a chat; a
+  temporary secret key is deleted after use. No personal data goes to the
+  cloud until backup and restore are proved there. Never reset, delete or
+  overwrite the local database.
+- Backups (4b-1): `npm run backup:local` (Windows PC only, local database
+  only, read-only connection and transaction) writes
+  `backups/nexus-<environment>-<date>-<time>.json` and proves it at once;
+  `npm run backup:verify [-- "<file>"]` checks any backup. `backups/` is
+  ignored by Git. Guide: `docs/backup-and-restore.md`.
+- A backup holds the owner's contexts, tasks and notes with ids, dates,
+  revisions and formatting; never owner_id, email, passwords, sessions,
+  tokens or authenticator secrets. SHA-256 data fingerprint and file
+  integrity code: any change is refused (detects damage, not deliberate
+  forgery).
+- Restore (`scripts/backup/database.mjs`): only into an empty database and a
+  registered owner, one transaction. Rows go in with every rule active, then
+  the rule-set columns (tasks completed_at, updated_at; notes revision,
+  created_at, updated_at) are put back with `session_replication_role =
+  replica` for that step only, then everything is read back and must equal
+  the backup, or nothing is kept.
+- Proof so far is PGlite plus the Supabase imitation (`scripts/backup/verify.mjs`),
+  not real Supabase. Restoring into real Supabase (including whether the
+  cloud project allows `session_replication_role`) is proved in 4b-2.
+- `scripts/backup/format.mjs` lists every backed-up column. A migration that
+  changes contexts, tasks or notes updates that list and the restore in the
+  same commit; the tools refuse a database whose columns differ.
+- `npm run test:backup` (fictional data only, part of `npm run check`).
+  Real backups exist only on the Windows PC, never on the Mac.
 
 ## Before each commit
 
@@ -443,9 +485,14 @@ implement any of these until the owner asks.
   change).
 - 3c-4a Desktop shell (Tauri 2 window, single instance, remembered window,
   links to the default browser, strict CSP, NSIS installer): written on the
-  Mac 16 October 2026; not yet compiled. Awaiting the first build and test on
-  the PC. Next: 3c-4b, only with the owner's approval.
-- Go live at £0 (needs a free Supabase project slot).
+  Mac 16 October 2026. The owner reports it compiled, installed and working
+  on the PC (sign-in, Mission Control, Notes); the PC's `Cargo.lock` has not
+  yet reached this repository.
+- 3c-4b-1 Local backup and proven restore (PGlite): built on the Mac 16
+  October 2026; awaiting PC verification. Next: 3c-4b-2, only with the
+  owner's approval.
+- Go live at £0: the owner has created the Supabase Cloud project (16 October
+  2026).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
 - 4 Daily-use version: pages built from the designs, manual backup and restore.
@@ -483,7 +530,7 @@ conversations have their own consent and legal rights to respect.
 
 ## Open questions
 
-- How many active free-plan Supabase projects the owner's account has (the
-  limit is two; this decides whether go-live can be free).
+- The cloud project's plan (free assumed), region and PostgreSQL version
+  (local is 17); needed before 4b-2.
 - Windows details for the TV check: edition, display arrangement and scale,
   everyday browser, virtual desktops.
