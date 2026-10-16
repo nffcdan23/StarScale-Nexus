@@ -3,8 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Tools used only on the Windows PC: the PostgreSQL client for real security checks, integration tests and account set-up, and the Supabase command-line tool. Never installed on the MacBook.",
+  "description": "Tools used only on the Windows PC: the PostgreSQL client for real security checks, integration tests and account set-up, the Supabase command-line tool, and the Tauri command-line tool that builds the desktop app. Never installed on the MacBook.",
   "dependencies": {
+    "@tauri-apps/cli": "2.12.1",
     "pg": "8.23.1",
     "supabase": "2.120.0"
   }

@@ -57,6 +57,8 @@ plain English, define technical terms, and go one step at a time.
   needs `pg` loads it with `tools/windows/load-pg.mjs`. All of these refuse
   to run anywhere but Windows. Never install anything into `tools/windows` on
   the Mac; update its lockfile only with `--package-lock-only`.
+- The Tauri command-line tool is also Windows-only (`tools/windows`): `npm run
+  tauri -- <command>` and `npm run desktop:build` (see Desktop app).
 
 ## Security tests
 
@@ -279,6 +281,39 @@ plain English, define technical terms, and go one step at a time.
 - The written rules (`static-checks.mjs`) now cover functions with inputs
   and `create or replace`; before Phase 3a they silently skipped them.
 
+## Desktop app (Phase 3c-4)
+
+- Plan approved 16 October 2026: Tauri 2. 3c-4a desktop shell; 3c-4b
+  automatic Docker and Supabase start-up (development builds only); 3c-4c
+  install and update routine; hosted-Supabase build at go-live. Each needs
+  its own go-ahead. Build and install steps: `docs/desktop-app.md`.
+- `src-tauri/`: Rust written on the Mac, compiled and tested only on the PC.
+  Keep it small. Exact pins: tauri 2.12.1, tauri-build 2.7.1, opener 2.7.0,
+  single-instance 2.5.2, window-state 2.5.0; JS `@tauri-apps/api` 2.12.1 and
+  `@tauri-apps/plugin-opener` 2.7.0 (main manifest, plain JS); CLI 2.12.1 in
+  `tools/windows`. `Cargo.lock` comes from the first PC build and is committed.
+- Permanent: product name "StarScale Nexus", identifier
+  `uk.co.starscale.nexus`, window `useHttpsScheme: false`. The app's origin is
+  http://tauri.localhost; localStorage (sign-in session, note drafts) is kept
+  per origin under %LOCALAPPDATA%\uk.co.starscale.nexus. Changing either
+  setting orphans them. The app's storage is separate from Chrome's, and
+  `tauri dev` (origin http://localhost:5180) is separate again.
+- Security: one capability (`capabilities/main-window.json`) allowing only
+  `opener:allow-open-url` for http, https and mailto. A Rust navigation guard
+  keeps the window on the app's own pages; `src/app/desktop/externalLinks.ts`
+  sends other links to the default browser (desktop only, loaded lazily).
+  CSP in `tauri.conf.json`: everything 'self', no unsafe-inline or
+  unsafe-eval, connect-src limited to IPC and the local Supabase stack;
+  `freezePrototype` on. Tauri adds nonces/hashes to the CSP, so inline styles
+  cannot be allowed: TipTap's style tag is off (`editorOptions`) and its rules
+  live in `editor/editorBase.css`. `desktopConfig.test.ts` guards all of this.
+  `tools/windows/tauri.mjs` refuses a build whose .env.local Supabase address
+  is not in connect-src, and makes the icons from `src-tauri/app-icon.svg`.
+- Installer: per-user NSIS (Start menu entry; desktop shortcut via the
+  finish-page box). Not code-signed: Windows may warn (SmartScreen, unknown
+  publisher). Updates: rebuild and reinstall for now.
+- The TV stays in a browser kiosk profile, not the desktop app.
+
 ## Before each commit
 
 - Check `git status` for unrelated or sensitive files. `.env` files, keys,
@@ -405,8 +440,11 @@ implement any of these until the owner asks.
   on the PC.
 - 3c-3 Conflict resolution (Keep both, Use latest version, Use my version):
   built on the Mac 15 October 2026; awaiting PC verification (no database
-  change). Next: the desktop application milestone, only with the owner's
-  approval.
+  change).
+- 3c-4a Desktop shell (Tauri 2 window, single instance, remembered window,
+  links to the default browser, strict CSP, NSIS installer): written on the
+  Mac 16 October 2026; not yet compiled. Awaiting the first build and test on
+  the PC. Next: 3c-4b, only with the owner's approval.
 - Go live at £0 (needs a free Supabase project slot).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.

@@ -2,6 +2,7 @@ import type { Extensions } from '@tiptap/core'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import StarterKit from '@tiptap/starter-kit'
+import './editorBase.css'
 
 // The note editor's formatting, in one place. Only Notes imports this (and,
 // from Phase 3b-2, only through a lazily loaded route), so the editor is
@@ -14,6 +15,12 @@ import StarterKit from '@tiptap/starter-kit'
 // by the database's note checks (migration 20261017090000_notes), which
 // derive the searchable text from it; security check NOTE-23 proves that for
 // the same sample document the editor tests use.
+
+/**
+ * Options every Nexus editor uses. TipTap's own style tag is replaced by
+ * editorBase.css, so no inline style is needed (desktop security policy).
+ */
+export const editorOptions = { injectCSS: false } as const
 
 /** The database's rule (migration 20261017090000_notes): only web and email links. */
 export function isSafeLink(href: unknown): boolean {

@@ -1,0 +1,5 @@
+# Build output (several GB) and files Tauri regenerates on every build.
+/target/
+/gen/schemas
+# Generated from app-icon.svg on the PC before the first build (npm run tauri).
+/icons/

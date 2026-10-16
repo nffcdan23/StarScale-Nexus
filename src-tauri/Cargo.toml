@@ -1,0 +1,25 @@
+# The StarScale Nexus desktop app (Tauri 2). Built only on the Windows PC:
+# the MacBook never installs Rust. Versions are pinned exactly; Cargo.lock
+# is created by the first build on the PC and committed from there.
+
+[package]
+name = "starscale-nexus"
+version = "0.1.0"
+description = "StarScale Nexus desktop app"
+authors = ["StarScale"]
+edition = "2021"
+publish = false
+
+[lib]
+# Named differently from the package to avoid a known Windows build clash.
+name = "starscale_nexus_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.1", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.1", features = [] }
+tauri-plugin-opener = "=2.7.0"
+tauri-plugin-single-instance = "=2.5.2"
+tauri-plugin-window-state = "=2.5.0"

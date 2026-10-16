@@ -5,7 +5,7 @@ import form from '../../components/Form/Form.module.css'
 import type { Note, NoteDoc } from '../../data/types'
 import { copyTitle } from './conflicts'
 import type { NoteDraft } from './drafts'
-import { createNoteExtensions } from './editor/extensions'
+import { createNoteExtensions, editorOptions } from './editor/extensions'
 import { editedLabel } from './noteTime'
 import editorStyles from './NoteEditor.module.css'
 import styles from './ConflictResolver.module.css'
@@ -174,6 +174,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
 /** A note's formatted text, shown read-only through the editor (never as HTML). */
 function ReadOnlyNote({ content, label }: { content: NoteDoc; label: string }) {
   const editor = useEditor({
+    ...editorOptions,
     extensions: createNoteExtensions(),
     content: content as JSONContent,
     editable: false,

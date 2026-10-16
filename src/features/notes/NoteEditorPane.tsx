@@ -13,7 +13,7 @@ import { londonClock } from '../../lib/dashboard'
 import { ConflictResolver } from './ConflictResolver'
 import { copyTitle, sameAsDatabase } from './conflicts'
 import { drafts, registerOpenNote, type NoteDraft } from './drafts'
-import { createNoteExtensions } from './editor/extensions'
+import { createNoteExtensions, editorOptions } from './editor/extensions'
 import { FormatToolbar } from './editor/FormatToolbar'
 import { editedLabel } from './noteTime'
 import { autosaveTiming, useAutosave, type SaveOutcome } from './useAutosave'
@@ -264,6 +264,7 @@ function NoteEditor({ opening, ownerId, editorSession, contexts, onChanged }: No
   // The latest document, kept so a copy can still be made while the editor closes.
   const latestDoc = useRef<ProseMirrorNode | null>(null)
   const editor = useEditor({
+    ...editorOptions,
     extensions: createNoteExtensions(),
     content: (restored?.content ?? note?.content ?? emptyDoc) as JSONContent,
     editable: !archived && opening.held.length === 0,

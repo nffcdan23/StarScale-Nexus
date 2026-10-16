@@ -16,11 +16,15 @@
     "account": "node scripts/setup-account.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "setup:windows": "node tools/windows/setup.mjs",
-    "supabase": "node tools/windows/supabase.mjs"
+    "supabase": "node tools/windows/supabase.mjs",
+    "tauri": "node tools/windows/tauri.mjs",
+    "desktop:build": "node tools/windows/tauri.mjs build"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",
     "@supabase/supabase-js": "2.117.2",
+    "@tauri-apps/api": "2.12.1",
+    "@tauri-apps/plugin-opener": "2.7.0",
     "@tiptap/core": "3.31.4",
     "@tiptap/extension-list": "3.31.4",
     "@tiptap/extensions": "3.31.4",
