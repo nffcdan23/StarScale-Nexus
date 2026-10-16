@@ -574,7 +574,8 @@ export const cases = [
 /**
  * Checks that cannot be imitated, because they exercise Supabase's own
  * sign-in service and Data API. They are implemented in real/api-checks.mjs
- * and run only against a real local Supabase stack.
+ * and run against a real Supabase database: the local stack, and the cloud
+ * project (Phase 3c-4b-2).
  */
 export const realOnlyCases = [
   { id: 'REAL-01', title: 'The migrations apply cleanly to a real Supabase database' },
@@ -587,4 +588,18 @@ export const realOnlyCases = [
   { id: 'REAL-08', title: 'New sign-ups are refused' },
   { id: 'REAL-09', title: 'After a real authenticator code, the owner can add and search a note but not forge its searchable text' },
   { id: 'REAL-10', title: 'A real TV sign-in cannot read, search or add notes, and a visitor cannot search them' },
+]
+
+/**
+ * Checks for the cloud project only (cloud/run-cloud.mjs), on top of every
+ * access check and every check above. Recorded separately from the local
+ * results.
+ */
+export const cloudOnlyCases = [
+  { id: 'CLOUD-01', title: 'The keys and the database connection belong to this project, over a verified encrypted connection' },
+  { id: 'CLOUD-02', title: 'Sign-in settings match supabase/config.toml: sign-ups off, email and password only' },
+  { id: 'CLOUD-03', title: "The cloud database has exactly this project's migrations, in order" },
+  { id: 'CLOUD-04', title: 'Tables, columns, rules, functions, triggers and permissions match the verified local database' },
+  { id: 'CLOUD-05', title: 'Restore drill: a fictional backup restores identically, only its owner with a code sees it, and it is fully undone' },
+  { id: 'CLOUD-06', title: 'Afterwards the project is empty again: no accounts, sign-ins, contexts, tasks or notes' },
 ]

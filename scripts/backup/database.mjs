@@ -158,6 +158,27 @@ export function describeDifference(expected, actual) {
  * Restores a backup (already checked by readBackup) into an EMPTY Nexus
  * database, giving every record to ownerId, who must be registered there as
  * an owner. All or nothing: one transaction, undone on any problem.
+ */
+export async function restoreBackup(db, backup, ownerId) {
+  await db.query('begin')
+  try {
+    await restoreRecords(db, backup, ownerId)
+    await db.query('commit')
+  } catch (error) {
+    await db.query('rollback')
+    throw asBackupProblem(error)
+  }
+}
+
+/** Database errors in plain words; problems already worded pass through. */
+export function asBackupProblem(error) {
+  if (error instanceof BackupProblem) return error
+  return new BackupProblem(`The database refused the restore (${error.message}). Nothing was kept.`, { cause: error })
+}
+
+/**
+ * The restore itself, inside a transaction the caller owns: restoreBackup
+ * commits it; the cloud restore drill always undoes it.
  *
  * 1. Records go in with every database rule active, so each note's document,
  *    links and searchable text are checked by the database itself, and every
@@ -166,48 +187,38 @@ export function describeDifference(expected, actual) {
  *    are then put back, with the rules paused for that one step only
  *    (session_replication_role, as standard PostgreSQL restores do).
  * 3. Everything is read back and must equal the backup exactly, including
- *    the searchable text the database derived in step 1. Otherwise nothing
- *    is kept.
+ *    the searchable text the database derived in step 1.
  */
-export async function restoreBackup(db, backup, ownerId) {
+export async function restoreRecords(db, backup, ownerId) {
   const { data } = backup
-  await db.query('begin')
-  try {
-    await checkStructure(db)
+  await checkStructure(db)
 
-    const { rows: existing } = await db.query(
-      `select (select count(*) from public.contexts) + (select count(*) from public.tasks)
-            + (select count(*) from public.notes) as records`,
+  const { rows: existing } = await db.query(
+    `select (select count(*) from public.contexts) + (select count(*) from public.tasks)
+          + (select count(*) from public.notes) as records`,
+  )
+  if (Number(existing[0].records) !== 0) {
+    throw new BackupProblem(
+      'The database to restore into already holds contexts, tasks or notes. A restore only ever goes into an empty database, so nothing is overwritten.',
     )
-    if (Number(existing[0].records) !== 0) {
-      throw new BackupProblem(
-        'The database to restore into already holds contexts, tasks or notes. A restore only ever goes into an empty database, so nothing is overwritten.',
-      )
-    }
-    const { rows: owner } = await db.query(
-      `select 1 from private.identities where user_id = $1::uuid and kind = 'owner'`,
-      [ownerId],
-    )
-    if (owner.length !== 1) {
-      throw new BackupProblem('The account to restore for is not registered as an owner in that database.')
-    }
+  }
+  const { rows: owner } = await db.query(
+    `select 1 from private.identities where user_id = $1::uuid and kind = 'owner'`,
+    [ownerId],
+  )
+  if (owner.length !== 1) {
+    throw new BackupProblem('The account to restore for is not registered as an owner in that database.')
+  }
 
-    for (const table of TABLE_NAMES) await insertRows(db, table, data[table], ownerId)
+  for (const table of TABLE_NAMES) await insertRows(db, table, data[table], ownerId)
 
-    await db.query('set local session_replication_role = replica')
-    for (const table of TABLE_NAMES) await putBackRuleColumns(db, table, data[table], ownerId)
-    await db.query('set local session_replication_role = origin')
+  await db.query('set local session_replication_role = replica')
+  for (const table of TABLE_NAMES) await putBackRuleColumns(db, table, data[table], ownerId)
+  await db.query('set local session_replication_role = origin')
 
-    const restored = await readTables(db, ownerId)
-    const difference = describeDifference(data, restored)
-    if (difference) {
-      throw new BackupProblem(`The restored records do not match the backup (${difference}). Nothing was kept.`)
-    }
-
-    await db.query('commit')
-  } catch (error) {
-    await db.query('rollback')
-    if (error instanceof BackupProblem) throw error
-    throw new BackupProblem(`The database refused the restore (${error.message}). Nothing was kept.`, { cause: error })
+  const restored = await readTables(db, ownerId)
+  const difference = describeDifference(data, restored)
+  if (difference) {
+    throw new BackupProblem(`The restored records do not match the backup (${difference}). Nothing was kept.`)
   }
 }

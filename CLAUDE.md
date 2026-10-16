@@ -55,7 +55,9 @@ plain English, define technical terms, and go one step at a time.
   (`pg` and the `supabase` command-line tool, with their own lockfile), so
   the main `npm ci` never brings them to the Mac. On the PC only: `npm run
   setup:windows` installs them; `npm run supabase -- <command>` runs the
-  Supabase tool (never `npx supabase`, which would look elsewhere). Code that
+  Supabase tool (never `npx supabase`, which would look elsewhere); it is for
+  the local stack only and refuses cloud and platform commands, `db reset`
+  and `stop --no-backup` (`tools/windows/supabase-cli.mjs`). Code that
   needs `pg` loads it with `tools/windows/load-pg.mjs`. All of these refuse
   to run anywhere but Windows. Never install anything into `tools/windows` on
   the Mac; update its lockfile only with `--package-lock-only`.
@@ -353,8 +355,38 @@ plain English, define technical terms, and go one step at a time.
 - `scripts/backup/format.mjs` lists every backed-up column. A migration that
   changes contexts, tasks or notes updates that list and the restore in the
   same commit; the tools refuse a database whose columns differ.
-- `npm run test:backup` (fictional data only, part of `npm run check`).
-  Real backups exist only on the Windows PC, never on the Mac.
+- `npm run test:backup` (fictional data only, part of `npm run check`
+  through `npm run test:tools`). Real backups exist only on the Windows PC,
+  never on the Mac.
+- Cloud tooling (4b-2), Windows PC only, guide `docs/cloud-setup.md`:
+  `npm run cloud:status` (read-only), `npm run cloud:migrate` (applies
+  missing migrations in order after the owner types the project id; refuses
+  an unknown or out-of-order history and any migration that drops, empties,
+  deletes or updates data; never seed, never reset), `npm run
+  test:security:cloud` (only on a migrated, empty project, after the typed
+  project id). Code in `scripts/cloud/`, `tests/security/cloud/`.
+- Cloud settings: `.env.cloud.local` (ignored; example `.env.cloud.example`)
+  holds only the project id, publishable key and session pooler host; API
+  address and database user (`postgres.<project id>`) are derived from the
+  id. `supabase-ca.crt` (ignored) verifies TLS before the password is sent.
+  The database password and a temporary secret key are typed into a hidden
+  prompt each run, never stored, and removed from every message. `db push`
+  gets the password through its environment, never the command line.
+- Cloud checks (`tests/security/cloud/run-cloud.mjs`): CLOUD-01 to CLOUD-06
+  plus every access and REAL check, recorded in
+  `tests/security/cloud/results.json` and the report's separate "Cloud"
+  column. CLOUD-04 compares the catalogue (tables, columns, constraints,
+  indexes, policies, functions, triggers, anon/authenticated/PUBLIC
+  permissions) with the local stack, read-only. CLOUD-05 restores the
+  fictional backup (`tests/backup/fictional-data.mjs`) in a transaction that
+  is always rolled back (`scripts/cloud/drill.mjs`). CLOUD-06 only reports
+  leftovers; nothing is deleted except the run's own test sign-ins.
+- Not yet verified on the PC: whether the pooler's certificate verifies with
+  the downloaded CA, whether `db push --db-url` honours PGPASSWORD and
+  PGSSLMODE, whether the cloud accepts `@example.test` test emails and
+  `session_replication_role` for postgres. The first PC run decides.
+- `npm run test:tools` (backup and cloud tools, fictional data and fakes
+  only) is part of `npm run check`.
 
 ## Before each commit
 
@@ -488,9 +520,12 @@ implement any of these until the owner asks.
   Mac 16 October 2026. The owner reports it compiled, installed and working
   on the PC (sign-in, Mission Control, Notes); the PC's `Cargo.lock` has not
   yet reached this repository.
-- 3c-4b-1 Local backup and proven restore (PGlite): built on the Mac 16
-  October 2026; awaiting PC verification. Next: 3c-4b-2, only with the
-  owner's approval.
+- 3c-4b-1 Local backup and proven restore (PGlite): verified on the PC
+  (17 tests, a real local backup made and verified).
+- 3c-4b-2 Cloud connection tooling, migrations, cloud security checks and
+  restore drill: built on the Mac 16 October 2026; awaiting the owner's run
+  on the PC (`docs/cloud-setup.md`). Next: 3c-4b-3, only with the owner's
+  approval.
 - Go live at £0: the owner has created the Supabase Cloud project (16 October
   2026).
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,

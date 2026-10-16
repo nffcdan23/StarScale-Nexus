@@ -14,24 +14,12 @@ import { verifyBackup } from '../../scripts/backup/verify.mjs'
 import { loadMigrations } from '../security/lib/migrations.mjs'
 import { projectRoot } from '../security/lib/paths.mjs'
 import { createMockDatabase } from '../security/mock/pglite-database.mjs'
+import { addFictionalHistory, fictional, registerOwner, richNote } from './fictional-data.mjs'
 
-const richNote = JSON.parse(await readFile(join(projectRoot, 'tests', 'security', 'lib', 'rich-note.json'), 'utf8'))
-
-const OWNER = '11111111-1111-4111-8111-111111111111'
-const OTHER_OWNER = '22222222-2222-4222-8222-222222222222'
-const WORK = 'a0000000-0000-4000-8000-000000000001'
-const HOME = 'a0000000-0000-4000-8000-000000000002'
-const OTHER_CONTEXT = 'a0000000-0000-4000-8000-000000000003'
-const TASK_TIMED = 'b0000000-0000-4000-8000-000000000001'
-const TASK_DATE_ONLY = 'b0000000-0000-4000-8000-000000000002'
-const TASK_DONE = 'b0000000-0000-4000-8000-000000000003'
-const TASK_ARCHIVED = 'b0000000-0000-4000-8000-000000000004'
-const TASK_IMPORTED = 'b0000000-0000-4000-8000-000000000005'
-const NOTE_RICH = 'c0000000-0000-4000-8000-000000000001'
-const NOTE_LOOSE = 'c0000000-0000-4000-8000-000000000002'
-const NOTE_ARCHIVED = 'c0000000-0000-4000-8000-000000000003'
-const NOTE_EDITED = 'c0000000-0000-4000-8000-000000000004'
-const NOTE_OTHER = 'c0000000-0000-4000-8000-000000000005'
+const OWNER = fictional.owner
+const OTHER_OWNER = fictional.otherOwner
+const { work: WORK, home: HOME, taskDone: TASK_DONE, taskDateOnly: TASK_DATE_ONLY } = fictional
+const { noteRich: NOTE_RICH, noteLoose: NOTE_LOOSE, noteArchived: NOTE_ARCHIVED, noteEdited: NOTE_EDITED } = fictional
 
 const migrations = await loadMigrations()
 // Databases made inside a test close after it; ones a group shares close at the end.
@@ -58,71 +46,10 @@ async function database() {
   return db
 }
 
-async function registerOwner(db, id, label) {
-  await db.query('insert into auth.users (id) values ($1)', [id])
-  await db.query(`insert into private.identities (user_id, kind, label) values ($1, 'owner', $2)`, [id, label])
-}
-
-function paragraph(text) {
-  return { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
-}
-
-/** A database with a fictional history: old dates, edits, archives, every task and note shape. */
+/** A database with the fictional history: old dates, edits, archives, every task and note shape. */
 async function sourceDatabase() {
   const db = await database()
-  await registerOwner(db, OWNER, 'Fictional owner')
-  await registerOwner(db, OTHER_OWNER, 'Fictional second owner')
-
-  await db.query(
-    `insert into public.contexts (id, owner_id, name, slug, show_on_tv, created_at, updated_at, archived_at) values
-       ($1, $4, 'Fictional Work', 'work', true, '2026-09-01T08:00:00.123456Z', '2026-09-02T09:30:00Z', null),
-       ($2, $4, 'Fictional Home', 'home', false, '2026-09-03T10:00:00Z', '2026-09-20T11:00:00Z', '2026-09-20T11:00:00Z'),
-       ($3, $5, 'Other Account', 'other', false, '2026-09-04T10:00:00Z', '2026-09-04T10:00:00Z', null)`,
-    [WORK, HOME, OTHER_CONTEXT, OWNER, OTHER_OWNER],
-  )
-
-  await db.query(
-    `insert into public.tasks
-       (id, owner_id, context_id, title, notes, status, priority, due_at, due_on, hide_from_tv, origin, source, external_id, created_at, archived_at)
-     values
-       ($1, $6, $7, 'Call the fictional supplier', E'Line one\nLine two', 'open', 'high', '2026-10-20T14:30:00Z', null, false, 'owner', null, null, '2026-09-05T08:00:00Z', null),
-       ($2, $6, $7, 'Café plans 🚀 — “quotes”', null, 'open', 'low', null, '2026-10-24', true, 'owner', null, null, '2026-09-06T08:00:00Z', null),
-       ($3, $6, $8, 'Finished fictional errand', null, 'done', 'medium', null, null, false, 'owner', null, null, '2026-09-07T08:00:00Z', null),
-       ($4, $6, $8, 'Archived fictional task', null, 'open', 'medium', null, null, false, 'owner', null, null, '2026-09-08T08:00:00Z', '2026-09-30T12:00:00Z'),
-       ($5, $6, $7, 'Imported fictional item', null, 'open', 'medium', null, null, false, 'integration', 'fiction-feed', 'item-42', '2026-09-09T08:00:00Z', null)`,
-    [TASK_TIMED, TASK_DATE_ONLY, TASK_DONE, TASK_ARCHIVED, TASK_IMPORTED, OWNER, WORK, HOME],
-  )
-
-  const notes = [
-    [NOTE_RICH, WORK, 'Fictional plan', richNote.doc, true, null],
-    [NOTE_LOOSE, null, 'Uncategorised fictional note', paragraph('Nothing real here.'), false, null],
-    [NOTE_ARCHIVED, HOME, 'Archived fictional note', paragraph('Old.'), false, '2026-09-25T09:00:00Z'],
-    [NOTE_EDITED, WORK, 'First title', paragraph('Draft.'), false, null],
-  ]
-  for (const [id, context, title, content, pinned, archivedAt] of notes) {
-    await db.query(
-      `insert into public.notes (id, owner_id, context_id, title, content, pinned, archived_at)
-       values ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-      [id, OWNER, context, title, JSON.stringify(content), pinned, archivedAt],
-    )
-  }
-  await db.query(
-    `insert into public.notes (id, owner_id, title, content) values ($1, $2, 'Other account note', $3::jsonb)`,
-    [NOTE_OTHER, OTHER_OWNER, JSON.stringify(paragraph('Belongs to someone else.'))],
-  )
-
-  // Two real edits through the database rules: revision 1 becomes 3.
-  await db.query(`update public.notes set title = 'Second title' where id = $1`, [NOTE_EDITED])
-  await db.query(`update public.notes set title = 'Edited fictional note' where id = $1`, [NOTE_EDITED])
-
-  // Then move the history into the past, as a long-used database would have it.
-  await db.exec(`
-    set session_replication_role = replica;
-    update public.tasks set completed_at = '2026-10-10T16:45:12.345678Z' where id = '${TASK_DONE}';
-    update public.tasks set updated_at = created_at + interval '1 day';
-    update public.notes set created_at = '2026-09-10T07:00:00.5Z', updated_at = '2026-10-01T18:20:00.654321Z';
-    set session_replication_role = origin;
-  `)
+  await addFictionalHistory(db)
   return db
 }
 

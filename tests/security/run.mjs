@@ -1,21 +1,23 @@
 // Runs the Nexus security checks and writes docs/security-report.md.
 //
-//   npm run test:security        Simulated checks only (PGlite). Works anywhere.
-//   npm run test:security:real   Also runs against a real local Supabase stack.
+//   npm run test:security         Simulated checks only (PGlite). Works anywhere.
+//   npm run test:security:real    Also runs against a real local Supabase stack.
+//   npm run test:security:cloud   Also runs against the empty cloud project
+//                                 (Windows PC only; see docs/cloud-setup.md).
 //
 // Exits with an error if anything that was executed failed.
 
-import { cases, realOnlyCases } from './lib/cases.mjs'
+import { cases, cloudOnlyCases, realOnlyCases } from './lib/cases.mjs'
 import { identities, seedSql } from './lib/fixtures.mjs'
 import { fingerprint, loadMigrations } from './lib/migrations.mjs'
 import { mutate, mutations } from './lib/mutations.mjs'
 import { reportPath } from './lib/paths.mjs'
-import { buildReport, loadRealResults, writeReport } from './lib/report.mjs'
+import { buildReport, loadCloudResults, loadRealResults, writeReport } from './lib/report.mjs'
 import { runCases } from './lib/run-cases.mjs'
 import { runStaticChecks } from './lib/static-checks.mjs'
 import { createMockDatabase } from './mock/pglite-database.mjs'
 
-const target = process.argv.includes('--target=real') ? 'real' : 'mock'
+const target = process.argv.includes('--target=real') ? 'real' : process.argv.includes('--target=cloud') ? 'cloud' : 'mock'
 const suite = { cases, identities, seedSql }
 
 async function runSimulated(migrations) {
@@ -75,9 +77,35 @@ if (target === 'real') {
 }
 const realFailed = target === 'real' && (realStartError !== null || realCounts.failed > 0 || realCounts.notExecuted > 0)
 
+let cloudCounts = null
+let cloudStartError = null
+if (target === 'cloud') {
+  // Loaded only when asked for: Windows PC only.
+  const { runCloud } = await import('./cloud/run-cloud.mjs')
+  const expectedIds = [...cases, ...realOnlyCases, ...cloudOnlyCases].map((testCase) => testCase.id)
+  const migrationVersions = migrations.map((migration) => migration.name.split('_')[0])
+  try {
+    cloudCounts = await runCloud({ suite, fingerprint: currentFingerprint, expectedIds, migrationVersions })
+  } catch (error) {
+    cloudStartError = error.message
+  }
+}
+const cloudFailed = target === 'cloud' && (cloudStartError !== null || cloudCounts.failed > 0 || cloudCounts.notExecuted > 0)
+
 const real = await loadRealResults()
+const cloud = await loadCloudResults()
 await writeReport(
-  buildReport({ fingerprint: currentFingerprint, applyResult, staticResults, mockResults, selfTests, realOnlyCases, real }),
+  buildReport({
+    fingerprint: currentFingerprint,
+    applyResult,
+    staticResults,
+    mockResults,
+    selfTests,
+    realOnlyCases,
+    cloudOnlyCases,
+    real,
+    cloud,
+  }),
 )
 
 const failures = [
@@ -93,8 +121,10 @@ console.log(`Migrations apply (PGlite): ${applyResult.status}`)
 console.log(`Written rules: ${passed(staticResults)} of ${staticResults.length} passed`)
 console.log(`Simulated access checks (PGlite): ${passed(mockResults)} of ${cases.length} passed`)
 console.log(`Self-test (removed protections caught): ${passed(selfTests)} of ${mutations.length}`)
-if (target !== 'real') {
+if (target === 'mock') {
   console.log(`Real Supabase checks: not executed in this run (${realOnlyCases.length} can only run on real Supabase)`)
+} else if (target === 'cloud') {
+  console.log('Local real Supabase checks: not run (this run was for the cloud project; local results are unchanged)')
 } else if (realStartError) {
   console.log(`Real Supabase checks: NOT STARTED, nothing was run: ${realStartError}`)
 } else {
@@ -103,10 +133,18 @@ if (target !== 'real') {
       `${realCounts.notExecuted} not executed, of ${realCounts.total}`,
   )
 }
+if (target === 'cloud') {
+  console.log(
+    cloudStartError
+      ? `Cloud project checks: NOT STARTED: ${cloudStartError}`
+      : `Cloud project checks: ${cloudCounts.passed} passed, ${cloudCounts.failed} failed, ` +
+          `${cloudCounts.notExecuted} not executed, of ${cloudCounts.total}`,
+  )
+}
 for (const failure of failures) console.log(`FAILED ${failure.id}: ${failure.detail}`)
 console.log(`Report: ${reportPath}`)
-if (target !== 'real') {
+if (target === 'mock') {
   console.log('Simulated passes are not proof that real Supabase security works.')
 }
 
-process.exitCode = failures.length > 0 || realFailed ? 1 : 0
+process.exitCode = failures.length > 0 || realFailed || cloudFailed ? 1 : 0

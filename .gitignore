@@ -21,6 +21,9 @@ id_rsa*
 id_ed25519*
 .claude/settings.local.json
 
+# The Supabase certificate downloaded for the cloud tools (public, but per machine).
+supabase-ca.crt
+
 # Nexus backups: the owner's notes in readable form. Never committed.
 # See docs/backup-and-restore.md.
 backups/

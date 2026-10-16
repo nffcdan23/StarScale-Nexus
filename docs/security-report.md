@@ -6,10 +6,13 @@ Migrations fingerprint: `c67d6af563c1`
 
 **Security status: VERIFIED on real Supabase for this version of the migrations.**
 
+**Cloud project status: NOT VERIFIED.** No real personal data may be stored in the cloud project.
+
 A pass in the "Simulated" column means the rule behaved correctly inside PGlite, a
 PostgreSQL engine running with an imitation of Supabase's roles and signed-in user.
 It is not proof that real Supabase security works. Only the "Real Supabase" column
-counts as a security pass.
+(the local stack on the Windows PC) and the "Cloud" column (the cloud project)
+count as security passes, each for its own database only.
 
 ## Summary
 
@@ -17,11 +20,15 @@ counts as a security pass.
 | --- | --- | --- | --- | --- | --- |
 | Simulated (PGlite) | 95 | 0 | 0 | 0 | 95 |
 | Real Supabase | 105 | 0 | 0 | 0 | 105 |
+| Cloud | 0 | 0 | 111 | 0 | 111 |
 
-Simulated rows count only checks run inside PGlite. Real rows count only checks
-run against a real local Supabase stack. A check is never counted in both.
+Simulated rows count only checks run inside PGlite. Real Supabase rows count only
+checks run against the real local Supabase stack, and Cloud rows only checks run
+against the cloud project. A check is never counted in more than one.
 
-Last real run: 2026-10-15 on win32, migrations fingerprint `c67d6af563c1` (current).
+Last real Supabase run: 2026-10-15 on win32, migrations fingerprint `c67d6af563c1` (current).
+
+Cloud checks have never been run.
 
 ## Migrations and written rules
 
@@ -37,120 +44,133 @@ Last real run: 2026-10-15 on win32, migrations fingerprint `c67d6af563c1` (curre
 
 ## Access checks
 
-| ID | Who | Check | Simulated (PGlite) | Real Supabase |
-| --- | --- | --- | --- | --- |
-| ANON-01 | Not signed in | Cannot read tasks | Passed | Passed |
-| ANON-02 | Not signed in | Cannot read contexts | Passed | Passed |
-| ANON-03 | Not signed in | Cannot add a task | Passed | Passed |
-| ANON-04 | Not signed in | Cannot change tasks | Passed | Passed |
-| ANON-05 | Not signed in | Cannot delete tasks | Passed | Passed |
-| ANON-06 | Not signed in | Cannot run the TV summary | Passed | Passed |
-| ANON-07 | Not signed in | Cannot read the identity register | Passed | Passed |
-| ANON-08 | Not signed in | Cannot run private helper functions | Passed | Passed |
-| TV-01 | TV sign-in | Sees no tasks directly | Passed | Passed |
-| TV-02 | TV sign-in | Sees no contexts directly | Passed | Passed |
-| TV-03 | TV sign-in | Cannot add a task | Passed | Passed |
-| TV-04 | TV sign-in | Cannot add a context | Passed | Passed |
-| TV-05 | TV sign-in | Cannot change any task | Passed | Passed |
-| TV-06 | TV sign-in | Cannot delete tasks | Passed | Passed |
-| TV-07 | TV sign-in | Cannot read the identity register | Passed | Passed |
-| TV-08 | TV sign-in | TV summary shows only visible tasks, titles and dates only | Passed | Passed |
-| NOCODE-01 | Owner, no authenticator code | Sees no tasks | Passed | Passed |
-| NOCODE-02 | Owner, no authenticator code | Sees no contexts | Passed | Passed |
-| NOCODE-03 | Owner, no authenticator code | Cannot add a task | Passed | Passed |
-| NOCODE-04 | Owner, no authenticator code | Cannot change any task | Passed | Passed |
-| NOCODE-05 | Owner, no authenticator code | Cannot run the TV summary | Passed | Passed |
-| OWNER-01 | Owner, with authenticator code | Sees their own five tasks and nobody else's | Passed | Passed |
-| OWNER-02 | Owner, with authenticator code | Sees their own two contexts | Passed | Passed |
-| OWNER-03 | Owner, with authenticator code | Can add a task; the database records the owner and origin itself | Passed | Passed |
-| OWNER-04 | Owner, with authenticator code | Can change their own task | Passed | Passed |
-| OWNER-05 | Owner, with authenticator code | Marking a task done records when it was completed | Passed | Passed |
-| OWNER-06 | Owner, with authenticator code | Cannot delete tasks (archive only) | Passed | Passed |
-| OWNER-07 | Owner, with authenticator code | Cannot choose a task's owner | Passed | Passed |
-| OWNER-08 | Owner, with authenticator code | Cannot choose a task's origin | Passed | Passed |
-| OWNER-09 | Owner, with authenticator code | Cannot hand a task to another owner | Passed | Passed |
-| OWNER-10 | Owner, with authenticator code | Cannot file a task under another owner's context | Passed | Passed |
-| OWNER-11 | Owner, with authenticator code | Cannot change another owner's task | Passed | Passed |
-| OWNER-12 | Owner, with authenticator code | A blank task title is rejected | Passed | Passed |
-| OWNER-13 | Owner, with authenticator code | Cannot read the identity register | Passed | Passed |
-| OWNER-14 | Owner, with authenticator code | Can run the summary, with the same redaction as the TV | Passed | Passed |
-| OWNER-15 | Owner, with authenticator code | Reopening a task clears its completion time | Passed | Passed |
-| OWNER-16 | Owner, with authenticator code | Can archive their own task | Passed | Passed |
-| OWNER-17 | Owner, with authenticator code | Can restore their own archived task | Passed | Passed |
-| OWNER-18 | Owner, with authenticator code | Can rename a context and change its TV setting | Passed | Passed |
-| OWNER-19 | Owner, with authenticator code | Cannot hand a context to another owner | Passed | Passed |
-| OWNER-20 | Owner, with authenticator code | Cannot change another owner's context | Passed | Passed |
-| TV-09 | TV sign-in | Cannot change any context or its TV setting | Passed | Passed |
-| NOCODE-06 | Owner, no authenticator code | Cannot change any context or its TV setting | Passed | Passed |
-| OWNER-21 | Owner, with authenticator code | Can give a task a date-only deadline | Passed | Passed |
-| OWNER-22 | Owner, with authenticator code | A task cannot have both a date-only and a timed deadline | Passed | Passed |
-| OWNER-23 | Owner, with authenticator code | Can add a task with a date-only deadline | Passed | Passed |
-| OWNER-24 | Owner, with authenticator code | Can switch a deadline from a date to a time in one change | Passed | Passed |
-| TV-10 | TV sign-in | Cannot set any deadline | Passed | Passed |
-| NOCODE-07 | Owner, no authenticator code | Cannot set any deadline | Passed | Passed |
-| ANON-09 | Not signed in | Cannot set any deadline | Passed | Passed |
-| TV-11 | TV sign-in | TV summary includes a date-only deadline | Passed | Passed |
-| TV-12 | TV sign-in | TV summary leaves out tasks in an archived context, even one shown on TV | Passed | Passed |
-| TV-13 | TV sign-in | TV summary lists by deadline day in London time, then priority | Passed | Passed |
-| TVCODE-01 | TV sign-in that enrolled its own authenticator | Still sees no tasks directly | Passed | Passed |
-| TVCODE-02 | TV sign-in that enrolled its own authenticator | Still cannot add a task | Passed | Passed |
-| TVCODE-03 | TV sign-in that enrolled its own authenticator | Still cannot add a context | Passed | Passed |
-| TVCODE-04 | TV sign-in that enrolled its own authenticator | Still gets only the redacted summary | Passed | Passed |
-| STRANGER-01 | Unregistered sign-in, with authenticator code | Sees no tasks | Passed | Passed |
-| STRANGER-02 | Unregistered sign-in, with authenticator code | Cannot add a context | Passed | Passed |
-| STRANGER-03 | Unregistered sign-in, with authenticator code | Cannot run the TV summary | Passed | Passed |
-| ANON-10 | Not signed in | Cannot read notes | Passed | Passed |
-| ANON-11 | Not signed in | Cannot search notes | Passed | Passed |
-| TV-14 | TV sign-in | Sees no notes | Passed | Passed |
-| TV-15 | TV sign-in | Cannot add a note | Passed | Passed |
-| TV-16 | TV sign-in | Cannot change any note | Passed | Passed |
-| TV-17 | TV sign-in | Finds nothing when searching notes | Passed | Passed |
-| TV-18 | TV sign-in | TV summary contains no note titles or text | Passed | Passed |
-| TVCODE-05 | TV sign-in that enrolled its own authenticator | Still sees no notes | Passed | Passed |
-| NOCODE-08 | Owner, no authenticator code | Sees no notes | Passed | Passed |
-| NOCODE-09 | Owner, no authenticator code | Cannot add a note | Passed | Passed |
-| NOCODE-10 | Owner, no authenticator code | Finds nothing when searching notes | Passed | Passed |
-| STRANGER-04 | Unregistered sign-in, with authenticator code | Sees no notes | Passed | Passed |
-| NOTE-01 | Owner, with authenticator code | Sees their own three notes and nobody else's | Passed | Passed |
-| NOTE-02 | Owner, with authenticator code | Can add a note with no context; the database sets the owner, revision and searchable text | Passed | Passed |
-| NOTE-03 | Owner, with authenticator code | Can file a note under their own context, and take it out again | Passed | Passed |
-| NOTE-04 | Owner, with authenticator code | Cannot file a note under another owner's context | Passed | Passed |
-| NOTE-05 | Owner, with authenticator code | Cannot choose a note's owner | Passed | Passed |
-| NOTE-06 | Owner, with authenticator code | Cannot change a note's owner | Passed | Passed |
-| NOTE-07 | Owner, with authenticator code | Cannot set a revision number | Passed | Passed |
-| NOTE-08 | Owner, with authenticator code | Cannot set the creation or edit time | Passed | Passed |
-| NOTE-09 | Owner, with authenticator code | Cannot write the searchable text directly | Passed | Passed |
-| NOTE-10 | Owner, with authenticator code | The searchable text always follows the document: headings, lists and line breaks | Passed | Passed |
-| NOTE-11 | Owner, with authenticator code | Editing the title or text raises the revision | Passed | Passed |
-| NOTE-12 | Owner, with authenticator code | Pinning or archiving leaves the revision alone | Passed | Passed |
-| NOTE-13 | Owner, with authenticator code | A save based on an older revision changes nothing | Passed | Passed |
-| NOTE-14 | Owner, with authenticator code | Cannot delete notes | Passed | Passed |
-| NOTE-15 | Owner, with authenticator code | Content that is not a document is rejected | Passed | Passed |
-| NOTE-16 | Owner, with authenticator code | A link that is not a web or email address is rejected | Passed | Passed |
-| NOTE-17 | Owner, with authenticator code | A title over 200 characters is rejected | Passed | Passed |
-| NOTE-18 | Owner, with authenticator code | Cannot change another owner's note | Passed | Passed |
-| NOTE-19 | Owner, with authenticator code | Search finds their own notes by word or word start, never archived or other owners' notes | Passed | Passed |
-| NOTE-20 | Owner, with authenticator code | Search can include archived notes and keep to one context | Passed | Passed |
-| NOTE-21 | Owner, with authenticator code | Search snippets mark matches with characters that are not HTML | Passed | Passed |
-| NOTE-22 | Owner, with authenticator code | An overlong search is refused | Passed | Passed |
-| NOTE-23 | Owner, with authenticator code | Every editor format (quotes, dividers, code included) is accepted and its text made searchable | Passed | Passed |
+| ID | Who | Check | Simulated (PGlite) | Real Supabase | Cloud |
+| --- | --- | --- | --- | --- | --- |
+| ANON-01 | Not signed in | Cannot read tasks | Passed | Passed | Not executed |
+| ANON-02 | Not signed in | Cannot read contexts | Passed | Passed | Not executed |
+| ANON-03 | Not signed in | Cannot add a task | Passed | Passed | Not executed |
+| ANON-04 | Not signed in | Cannot change tasks | Passed | Passed | Not executed |
+| ANON-05 | Not signed in | Cannot delete tasks | Passed | Passed | Not executed |
+| ANON-06 | Not signed in | Cannot run the TV summary | Passed | Passed | Not executed |
+| ANON-07 | Not signed in | Cannot read the identity register | Passed | Passed | Not executed |
+| ANON-08 | Not signed in | Cannot run private helper functions | Passed | Passed | Not executed |
+| TV-01 | TV sign-in | Sees no tasks directly | Passed | Passed | Not executed |
+| TV-02 | TV sign-in | Sees no contexts directly | Passed | Passed | Not executed |
+| TV-03 | TV sign-in | Cannot add a task | Passed | Passed | Not executed |
+| TV-04 | TV sign-in | Cannot add a context | Passed | Passed | Not executed |
+| TV-05 | TV sign-in | Cannot change any task | Passed | Passed | Not executed |
+| TV-06 | TV sign-in | Cannot delete tasks | Passed | Passed | Not executed |
+| TV-07 | TV sign-in | Cannot read the identity register | Passed | Passed | Not executed |
+| TV-08 | TV sign-in | TV summary shows only visible tasks, titles and dates only | Passed | Passed | Not executed |
+| NOCODE-01 | Owner, no authenticator code | Sees no tasks | Passed | Passed | Not executed |
+| NOCODE-02 | Owner, no authenticator code | Sees no contexts | Passed | Passed | Not executed |
+| NOCODE-03 | Owner, no authenticator code | Cannot add a task | Passed | Passed | Not executed |
+| NOCODE-04 | Owner, no authenticator code | Cannot change any task | Passed | Passed | Not executed |
+| NOCODE-05 | Owner, no authenticator code | Cannot run the TV summary | Passed | Passed | Not executed |
+| OWNER-01 | Owner, with authenticator code | Sees their own five tasks and nobody else's | Passed | Passed | Not executed |
+| OWNER-02 | Owner, with authenticator code | Sees their own two contexts | Passed | Passed | Not executed |
+| OWNER-03 | Owner, with authenticator code | Can add a task; the database records the owner and origin itself | Passed | Passed | Not executed |
+| OWNER-04 | Owner, with authenticator code | Can change their own task | Passed | Passed | Not executed |
+| OWNER-05 | Owner, with authenticator code | Marking a task done records when it was completed | Passed | Passed | Not executed |
+| OWNER-06 | Owner, with authenticator code | Cannot delete tasks (archive only) | Passed | Passed | Not executed |
+| OWNER-07 | Owner, with authenticator code | Cannot choose a task's owner | Passed | Passed | Not executed |
+| OWNER-08 | Owner, with authenticator code | Cannot choose a task's origin | Passed | Passed | Not executed |
+| OWNER-09 | Owner, with authenticator code | Cannot hand a task to another owner | Passed | Passed | Not executed |
+| OWNER-10 | Owner, with authenticator code | Cannot file a task under another owner's context | Passed | Passed | Not executed |
+| OWNER-11 | Owner, with authenticator code | Cannot change another owner's task | Passed | Passed | Not executed |
+| OWNER-12 | Owner, with authenticator code | A blank task title is rejected | Passed | Passed | Not executed |
+| OWNER-13 | Owner, with authenticator code | Cannot read the identity register | Passed | Passed | Not executed |
+| OWNER-14 | Owner, with authenticator code | Can run the summary, with the same redaction as the TV | Passed | Passed | Not executed |
+| OWNER-15 | Owner, with authenticator code | Reopening a task clears its completion time | Passed | Passed | Not executed |
+| OWNER-16 | Owner, with authenticator code | Can archive their own task | Passed | Passed | Not executed |
+| OWNER-17 | Owner, with authenticator code | Can restore their own archived task | Passed | Passed | Not executed |
+| OWNER-18 | Owner, with authenticator code | Can rename a context and change its TV setting | Passed | Passed | Not executed |
+| OWNER-19 | Owner, with authenticator code | Cannot hand a context to another owner | Passed | Passed | Not executed |
+| OWNER-20 | Owner, with authenticator code | Cannot change another owner's context | Passed | Passed | Not executed |
+| TV-09 | TV sign-in | Cannot change any context or its TV setting | Passed | Passed | Not executed |
+| NOCODE-06 | Owner, no authenticator code | Cannot change any context or its TV setting | Passed | Passed | Not executed |
+| OWNER-21 | Owner, with authenticator code | Can give a task a date-only deadline | Passed | Passed | Not executed |
+| OWNER-22 | Owner, with authenticator code | A task cannot have both a date-only and a timed deadline | Passed | Passed | Not executed |
+| OWNER-23 | Owner, with authenticator code | Can add a task with a date-only deadline | Passed | Passed | Not executed |
+| OWNER-24 | Owner, with authenticator code | Can switch a deadline from a date to a time in one change | Passed | Passed | Not executed |
+| TV-10 | TV sign-in | Cannot set any deadline | Passed | Passed | Not executed |
+| NOCODE-07 | Owner, no authenticator code | Cannot set any deadline | Passed | Passed | Not executed |
+| ANON-09 | Not signed in | Cannot set any deadline | Passed | Passed | Not executed |
+| TV-11 | TV sign-in | TV summary includes a date-only deadline | Passed | Passed | Not executed |
+| TV-12 | TV sign-in | TV summary leaves out tasks in an archived context, even one shown on TV | Passed | Passed | Not executed |
+| TV-13 | TV sign-in | TV summary lists by deadline day in London time, then priority | Passed | Passed | Not executed |
+| TVCODE-01 | TV sign-in that enrolled its own authenticator | Still sees no tasks directly | Passed | Passed | Not executed |
+| TVCODE-02 | TV sign-in that enrolled its own authenticator | Still cannot add a task | Passed | Passed | Not executed |
+| TVCODE-03 | TV sign-in that enrolled its own authenticator | Still cannot add a context | Passed | Passed | Not executed |
+| TVCODE-04 | TV sign-in that enrolled its own authenticator | Still gets only the redacted summary | Passed | Passed | Not executed |
+| STRANGER-01 | Unregistered sign-in, with authenticator code | Sees no tasks | Passed | Passed | Not executed |
+| STRANGER-02 | Unregistered sign-in, with authenticator code | Cannot add a context | Passed | Passed | Not executed |
+| STRANGER-03 | Unregistered sign-in, with authenticator code | Cannot run the TV summary | Passed | Passed | Not executed |
+| ANON-10 | Not signed in | Cannot read notes | Passed | Passed | Not executed |
+| ANON-11 | Not signed in | Cannot search notes | Passed | Passed | Not executed |
+| TV-14 | TV sign-in | Sees no notes | Passed | Passed | Not executed |
+| TV-15 | TV sign-in | Cannot add a note | Passed | Passed | Not executed |
+| TV-16 | TV sign-in | Cannot change any note | Passed | Passed | Not executed |
+| TV-17 | TV sign-in | Finds nothing when searching notes | Passed | Passed | Not executed |
+| TV-18 | TV sign-in | TV summary contains no note titles or text | Passed | Passed | Not executed |
+| TVCODE-05 | TV sign-in that enrolled its own authenticator | Still sees no notes | Passed | Passed | Not executed |
+| NOCODE-08 | Owner, no authenticator code | Sees no notes | Passed | Passed | Not executed |
+| NOCODE-09 | Owner, no authenticator code | Cannot add a note | Passed | Passed | Not executed |
+| NOCODE-10 | Owner, no authenticator code | Finds nothing when searching notes | Passed | Passed | Not executed |
+| STRANGER-04 | Unregistered sign-in, with authenticator code | Sees no notes | Passed | Passed | Not executed |
+| NOTE-01 | Owner, with authenticator code | Sees their own three notes and nobody else's | Passed | Passed | Not executed |
+| NOTE-02 | Owner, with authenticator code | Can add a note with no context; the database sets the owner, revision and searchable text | Passed | Passed | Not executed |
+| NOTE-03 | Owner, with authenticator code | Can file a note under their own context, and take it out again | Passed | Passed | Not executed |
+| NOTE-04 | Owner, with authenticator code | Cannot file a note under another owner's context | Passed | Passed | Not executed |
+| NOTE-05 | Owner, with authenticator code | Cannot choose a note's owner | Passed | Passed | Not executed |
+| NOTE-06 | Owner, with authenticator code | Cannot change a note's owner | Passed | Passed | Not executed |
+| NOTE-07 | Owner, with authenticator code | Cannot set a revision number | Passed | Passed | Not executed |
+| NOTE-08 | Owner, with authenticator code | Cannot set the creation or edit time | Passed | Passed | Not executed |
+| NOTE-09 | Owner, with authenticator code | Cannot write the searchable text directly | Passed | Passed | Not executed |
+| NOTE-10 | Owner, with authenticator code | The searchable text always follows the document: headings, lists and line breaks | Passed | Passed | Not executed |
+| NOTE-11 | Owner, with authenticator code | Editing the title or text raises the revision | Passed | Passed | Not executed |
+| NOTE-12 | Owner, with authenticator code | Pinning or archiving leaves the revision alone | Passed | Passed | Not executed |
+| NOTE-13 | Owner, with authenticator code | A save based on an older revision changes nothing | Passed | Passed | Not executed |
+| NOTE-14 | Owner, with authenticator code | Cannot delete notes | Passed | Passed | Not executed |
+| NOTE-15 | Owner, with authenticator code | Content that is not a document is rejected | Passed | Passed | Not executed |
+| NOTE-16 | Owner, with authenticator code | A link that is not a web or email address is rejected | Passed | Passed | Not executed |
+| NOTE-17 | Owner, with authenticator code | A title over 200 characters is rejected | Passed | Passed | Not executed |
+| NOTE-18 | Owner, with authenticator code | Cannot change another owner's note | Passed | Passed | Not executed |
+| NOTE-19 | Owner, with authenticator code | Search finds their own notes by word or word start, never archived or other owners' notes | Passed | Passed | Not executed |
+| NOTE-20 | Owner, with authenticator code | Search can include archived notes and keep to one context | Passed | Passed | Not executed |
+| NOTE-21 | Owner, with authenticator code | Search snippets mark matches with characters that are not HTML | Passed | Passed | Not executed |
+| NOTE-22 | Owner, with authenticator code | An overlong search is refused | Passed | Passed | Not executed |
+| NOTE-23 | Owner, with authenticator code | Every editor format (quotes, dividers, code included) is accepted and its text made searchable | Passed | Passed | Not executed |
 
 ## Checks that need real Supabase
 
 These exercise Supabase's own sign-in service and Data API, which are not imitated.
 
-| ID | Check | Simulated (PGlite) | Real Supabase |
+| ID | Check | Simulated (PGlite) | Real Supabase | Cloud |
+| --- | --- | --- | --- | --- |
+| REAL-01 | The migrations apply cleanly to a real Supabase database | Not possible | Passed | Not executed |
+| REAL-02 | A visitor with only the public key reads nothing through the Data API | Not possible | Passed | Not executed |
+| REAL-03 | A visitor with only the public key cannot run the TV summary | Not possible | Passed | Not executed |
+| REAL-04 | Password sign-in alone gives the owner no data | Not possible | Passed | Not executed |
+| REAL-05 | After a real authenticator code, the owner can read and add tasks | Not possible | Passed | Not executed |
+| REAL-06 | A real TV sign-in gets the redacted summary and no table access | Not possible | Passed | Not executed |
+| REAL-07 | A real TV sign-in cannot write through the Data API | Not possible | Passed | Not executed |
+| REAL-08 | New sign-ups are refused | Not possible | Passed | Not executed |
+| REAL-09 | After a real authenticator code, the owner can add and search a note but not forge its searchable text | Not possible | Passed | Not executed |
+| REAL-10 | A real TV sign-in cannot read, search or add notes, and a visitor cannot search them | Not possible | Passed | Not executed |
+
+## Checks for the cloud project only
+
+Run by `npm run test:security:cloud` on the Windows PC, against the empty cloud project.
+
+| ID | Check | Cloud | Detail |
 | --- | --- | --- | --- |
-| REAL-01 | The migrations apply cleanly to a real Supabase database | Not possible | Passed |
-| REAL-02 | A visitor with only the public key reads nothing through the Data API | Not possible | Passed |
-| REAL-03 | A visitor with only the public key cannot run the TV summary | Not possible | Passed |
-| REAL-04 | Password sign-in alone gives the owner no data | Not possible | Passed |
-| REAL-05 | After a real authenticator code, the owner can read and add tasks | Not possible | Passed |
-| REAL-06 | A real TV sign-in gets the redacted summary and no table access | Not possible | Passed |
-| REAL-07 | A real TV sign-in cannot write through the Data API | Not possible | Passed |
-| REAL-08 | New sign-ups are refused | Not possible | Passed |
-| REAL-09 | After a real authenticator code, the owner can add and search a note but not forge its searchable text | Not possible | Passed |
-| REAL-10 | A real TV sign-in cannot read, search or add notes, and a visitor cannot search them | Not possible | Passed |
+| CLOUD-01 | The keys and the database connection belong to this project, over a verified encrypted connection | Not executed |  |
+| CLOUD-02 | Sign-in settings match supabase/config.toml: sign-ups off, email and password only | Not executed |  |
+| CLOUD-03 | The cloud database has exactly this project's migrations, in order | Not executed |  |
+| CLOUD-04 | Tables, columns, rules, functions, triggers and permissions match the verified local database | Not executed |  |
+| CLOUD-05 | Restore drill: a fictional backup restores identically, only its owner with a code sees it, and it is fully undone | Not executed |  |
+| CLOUD-06 | Afterwards the project is empty again: no accounts, sign-ins, contexts, tasks or notes | Not executed |  |
 
 ## Self-test: do the checks notice a removed protection?
 
