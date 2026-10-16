@@ -1,0 +1,564 @@
+{
+  "fingerprint": "c67d6af563c1",
+  "ranOn": "2026-10-16",
+  "system": "win32",
+  "project": "wovl…zeow",
+  "postgres": "17.11",
+  "results": [
+    {
+      "id": "CLOUD-01",
+      "status": "passed",
+      "detail": "keys accepted by wovl…zeow; TLS verified"
+    },
+    {
+      "id": "CLOUD-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "CLOUD-03",
+      "status": "passed",
+      "detail": "4 of 4 applied in order"
+    },
+    {
+      "id": "CLOUD-04",
+      "status": "passed",
+      "detail": "4 tables, 43 columns, 31 constraints, 10 indexes, 6 policies, 7 functions, 3 triggers, 45 permissions; PostgreSQL local 17.11, cloud 17.11"
+    },
+    {
+      "id": "REAL-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-11",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-12",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-13",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-14",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-15",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-16",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-17",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-18",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-19",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-20",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-21",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-22",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-23",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "OWNER-24",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-11",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-12",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-13",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "ANON-11",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-14",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-15",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-16",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-17",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TV-18",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "TVCODE-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOCODE-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "STRANGER-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-11",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-12",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-13",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-14",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-15",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-16",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-17",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-18",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-19",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-20",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-21",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-22",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "NOTE-23",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "REAL-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "CLOUD-05",
+      "status": "passed",
+      "detail": "2 contexts, 5 tasks, 4 notes restored identically, then undone"
+    },
+    {
+      "id": "CLOUD-06",
+      "status": "passed",
+      "detail": ""
+    }
+  ]
+}
