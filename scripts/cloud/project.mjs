@@ -212,3 +212,36 @@ export function destructiveStatements(sql) {
     .replace(/\$([A-Za-z_]*)\$[\s\S]*?\$\1\$/g, ' ')
   return DESTRUCTIVE.filter(([pattern]) => pattern.test(code)).map(([, reason]) => reason)
 }
+
+/**
+ * A fingerprint of everything stored in the project, computed by the
+ * database itself: sign-in accounts (their ids only, as signing in changes
+ * other details), registered sign-ins, contexts, tasks and notes. Taken
+ * before and after the checks on a project in use: any difference means
+ * something was changed. Reads only; nothing leaves the database but the
+ * counts and hashes.
+ */
+export async function readDataFingerprint(db) {
+  const { rows } = await db.query(`
+    select
+      (select count(*)::int from auth.users) as accounts,
+      (select md5(coalesce(string_agg(u.id::text, ',' order by u.id), '')) from auth.users u) as accounts_hash,
+      (select count(*)::int from private.identities) as identities,
+      (select md5(coalesce(string_agg(to_jsonb(i)::text, ',' order by i.user_id), '')) from private.identities i) as identities_hash,
+      (select count(*)::int from public.contexts) as contexts,
+      (select md5(coalesce(string_agg(to_jsonb(c)::text, ',' order by c.id), '')) from public.contexts c) as contexts_hash,
+      (select count(*)::int from public.tasks) as tasks,
+      (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.tasks t) as tasks_hash,
+      (select count(*)::int from public.notes) as notes,
+      (select md5(coalesce(string_agg((to_jsonb(n) - 'search')::text, ',' order by n.id), '')) from public.notes n) as notes_hash
+  `)
+  return rows[0]
+}
+
+/** What differs between two fingerprints, in words; empty when nothing changed. */
+export function fingerprintChanges(before, after) {
+  const labels = { accounts: 'sign-in accounts', identities: 'registered sign-ins', contexts: 'contexts', tasks: 'tasks', notes: 'notes' }
+  return Object.entries(labels)
+    .filter(([key]) => before[key] !== after[key] || before[`${key}_hash`] !== after[`${key}_hash`])
+    .map(([key, label]) => (before[key] !== after[key] ? `${label}: ${before[key]} before, ${after[key]} after` : `${label} changed`))
+}

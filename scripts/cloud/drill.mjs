@@ -1,7 +1,7 @@
 // NEXUS-ADMIN-ONLY: the restore drill. Never imported by the app.
 //
-// Restores a FICTIONAL backup into the cloud database the same way a real
-// restore would (rules active, original dates and revisions put back,
+// Restores a FICTIONAL backup into the cloud database (empty or in use) the
+// same way a real restore would (rules active, original dates and revisions put back,
 // everything read back and compared), checks the restored records are
 // visible to their owner only with an authenticator code, and then undoes
 // the whole drill. Everything happens inside one transaction that is always
@@ -33,7 +33,9 @@ export async function restoreDrill(db, backup) {
     await db.query('insert into auth.users (id) values ($1::uuid)', [ownerId])
     await db.query(`insert into private.identities (user_id, kind, label) values ($1::uuid, 'owner', 'Restore drill')`, [ownerId])
 
-    await restoreRecords(db, backup, ownerId)
+    // A project in use already holds real records: only the stand-in owner,
+    // who exists only inside this transaction, must have none.
+    await restoreRecords(db, backup, ownerId, { emptyScope: 'owner' })
     const fingerprint = dataFingerprint(await readTables(db, ownerId))
     if (fingerprint !== backup.dataFingerprint) {
       throw new BackupProblem('The restored records do not match the backup.')

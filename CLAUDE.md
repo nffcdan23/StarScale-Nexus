@@ -345,13 +345,36 @@ plain English, define technical terms, and go one step at a time.
   connection tooling, migrations, real security checks and a restore drill
   on the still-empty project; 4b-3 separate local and cloud environments,
   cloud desktop build, new owner and TV accounts with a fresh authenticator;
-  4b-4 transfer of the contexts the owner chooses, first cloud backup, go-live.
+  4b-4 transfer of chosen data (later dropped: the local data is disposable).
 - Agreed approach: connect with `--db-url` through the session pooler, never
   `supabase login` or `supabase link`; the database password and secret key
   are typed when needed and never saved, printed or pasted into a chat; a
   temporary secret key is deleted after use. No personal data goes to the
   cloud until backup and restore are proved there. Never reset, delete or
   overwrite the local database.
+- Cloud backups (4a): `npm run backup:cloud` (Windows PC only, the project
+  in `.env.cloud.local`, database password typed hidden, no secret key,
+  read-only connection and transaction, exactly one owner) writes
+  `backups/nexus-cloud-<date>-<time>.json` (source records the shortened
+  project id) and proves it in PGlite like the local backup.
+- In-use cloud checks (4a): `npm run test:security:cloud-live`
+  (`tests/security/cloud/run-cloud-live.mjs`, shared parts in `shared.mjs`):
+  migrations must all be applied; typed project id; no accounts created;
+  every access check and REAL-01 in rolled-back transactions; LIVE-01 to
+  LIVE-06 (identity, sign-in settings, history, structure against local, a
+  restore drill beside existing records with `emptyScope: 'owner'`, and a
+  before/after fingerprint of every account id, sign-in, context, task and
+  note, computed in the database by `readDataFingerprint`). Results in
+  `tests/security/cloud/live-results.json`. The owner closes Nexus during
+  the run.
+- Reports are separate: `docs/security-report.md` (simulated and local) and
+  `docs/cloud-security-report.md` (full run and in-use check). The cloud
+  project counts as verified for the current migrations by a passing full
+  run, or by a passing in-use check on top of an earlier passing full run
+  (`cloudVerification` in `tests/security/lib/report.mjs`); `cloud:account`
+  uses the same rule.
+- Real restores (`restoreBackup`) still require contexts, tasks and notes to
+  be completely empty; only the drill uses the owner-scoped check.
 - Backups (4b-1): `npm run backup:local` (Windows PC only, local database
   only, read-only connection and transaction) writes
   `backups/nexus-<environment>-<date>-<time>.json` and proves it at once;
@@ -431,7 +454,8 @@ plain English, define technical terms, and go one step at a time.
   gate.
 - Fictional records made while testing 4b-3 stay in the cloud project
   (context "Fictional test"); the restore only goes into an empty project,
-  so 4b-4 must decide how to clear them, with the owner's approval.
+  so a restore would need them cleared first, with the owner's approval.
+  (No transfer of local data is planned: 3c-4b-4 was dropped.)
 
 ## Settings (owner request, 17 October 2026)
 
@@ -460,6 +484,46 @@ plain English, define technical terms, and go one step at a time.
 - The client-side current-password check is a UI safeguard; Supabase
   enforces it only if the project requires the current password or recent
   sign-in for password changes (dashboard setting, owner's choice).
+
+## Phase 4: Projects and Notes organisation (approved 17 October 2026)
+
+- Projects are the single source of truth for organising information: one
+  `projects` table (owner, name unique among active projects, optional
+  context, archived_at). Notes and tasks reference it (`project_id`,
+  optional); a note without a project is in the Inbox. No separate folders
+  table. Contexts stay as they are (life areas, task areas, TV visibility,
+  Mission Control). The Notes context picker stays.
+- One note editor at `/notes/<id>`: opening a note from a project goes there,
+  with the project's list shown; no copies, no synchronisation. New notes
+  made inside a project get its id from the first save; Inbox notes stay
+  unassigned. Moving a note between projects is not an edit (no revision
+  change). Projects can be created from Notes or Projects; renaming,
+  archiving and restoring only in the Projects workspace. Archived projects
+  keep their notes and tasks linked and findable.
+- Checkpoints: 4a cloud backup and in-use checks; 4b migration (projects,
+  project_id on notes and tasks, search filters for project, Inbox and
+  pinned, security checks, backup format 2 restoring format 1); 4c Notes
+  organisation (and hide the Projects placeholder); 4d notes search box;
+  4e Projects workspace. Built from the current interface design.
+- Before every migration: `backup:local` and `backup:cloud`, both proven;
+  apply locally and run the full real suite; then `cloud:migrate` and
+  `test:security:cloud-live`. Additive changes only; app rollback by
+  reinstalling the previous build; database fixed forward.
+- Future (roadmap only, not in Phase 4): project files, activity, project
+  assistants, AI Inbox classification, sub-folders inside a project; all as
+  tables referencing `projects.id`, never a second hierarchy.
+
+## Future: Files (roadmap only, recorded 17 October 2026)
+
+A dedicated Files section: Microsoft OneDrive and Google Drive (several
+connected accounts where supported), browsing, searching and previewing
+authorised files, linking external folders to existing projects, the same
+files reachable from Files or from their project, and later GitHub
+repositories and local directories. Files stay with their provider; Nexus
+does not copy them into Supabase. File links are provider-independent
+references: provider, account, external item id, Nexus project id. Each
+project keeps one stable identity. No OAuth, integrations or file tables
+until the owner approves that phase.
 
 ## Before each commit
 
@@ -600,10 +664,18 @@ implement any of these until the owner asks.
   111 of 111 cloud checks, project empty afterwards, PostgreSQL 17.11).
 - 3c-4b-3 Cloud desktop app, local/cloud environments, cloud sign-in tool:
   built on the Mac 16 October 2026; awaiting the owner's build, install and
-  checks on the PC (`docs/cloud-desktop.md`). Next: 3c-4b-4 (transfer of
-  real data), only with the owner's approval.
+  checks on the PC (`docs/cloud-desktop.md`). Reported working by the owner
+  (cloud app installed, owner account created, password changed).
 - Go live at £0: the owner has created the Supabase Cloud project (16 October
-  2026).
+  2026). Owner decision 17 October 2026: Nexus Cloud is the primary
+  application; the local database holds only disposable test data and is
+  NOT migrated (3c-4b-4 dropped). Local Supabase stays for development and
+  security testing.
+- Settings (account, password change, authenticator status, data and
+  privacy): built on the Mac 17 October 2026; awaiting PC checks.
+- Phase 4 (core workspace) plan approved 17 October 2026, see below. 4a
+  cloud backup and in-use cloud checks: built on the Mac 17 October 2026;
+  awaiting PC verification. Next: 4b, only with the owner's approval.
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
 - 4 Daily-use version: pages built from the designs, manual backup and restore.

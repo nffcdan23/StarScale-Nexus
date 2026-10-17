@@ -180,3 +180,32 @@ the key's menu → Delete). A new one can be made whenever it is needed again.
 | `npm run cloud:account -- owner\|tv --email ADDRESS` | Yes, only after you type the project id, and only once the cloud checks are recorded as passed: creates one sign-in (Phase 3c-4b-3, `docs/cloud-desktop.md`). `list` changes nothing |
 | `npm run cloud:account -- password --email ADDRESS` | Only that sign-in's password, after you type the project id; the new password is typed twice, hidden. Nothing created or deleted |
 | `npm run test:security:cloud` | Only temporarily, only after you type the project id, and only on an empty project: test accounts and made-up records that the run removes. Access checks and the restore drill are undone |
+| `npm run test:security:cloud-live` | No. For the project in use: after you type the project id, every check runs inside a step that is undone, no accounts are made, and it proves afterwards that every existing record is unchanged (see below) |
+| `npm run backup:cloud` | No. Read-only connection; saves a proven backup in the `backups` folder |
+
+## Checking the project in use (Phase 4a)
+
+Once the project holds your accounts and records, the full run above refuses
+(it needs an empty project). After any database change, check the project
+with:
+
+```
+npm run test:security:cloud-live
+```
+
+1. **Close Nexus on every device** first: the last check proves nothing in the
+   project changed, and your own edits would show up as changes.
+2. Have Docker Desktop and the local stack running (`npm run supabase --
+   start`): the structure is compared with the local database, reading only.
+3. Type the database password (hidden) and then the project id. No secret key.
+4. It should end with `Cloud project checks (in use): 102 passed, 0 failed, 0
+   not executed, of 102`.
+
+It runs every access check and REAL-01 inside transactions that are always
+undone, compares the structure with the local database, restores a fictional
+backup for a stand-in owner inside a transaction that is undone, and compares
+a fingerprint of every account, sign-in, context, task and note before and
+after (LIVE-06). It never creates accounts, so the sign-in checks REAL-02 to
+REAL-10 stay proven by the last full run. Results go to
+`tests/security/cloud/live-results.json` and `docs/cloud-security-report.md`,
+separate from the local report.

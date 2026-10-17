@@ -15,18 +15,22 @@ import {
   isEmpty,
   judgeAuthSettings,
   migrationPlan,
+  fingerprintChanges,
+  readDataFingerprint,
   readProjectState,
 } from '../../scripts/cloud/project.mjs'
 import { askHidden, askSecretKey, confirmProject } from '../../scripts/cloud/prompt.mjs'
 import { cloudSettings, loadCloudSettings, pushCommand, redact, shortRef } from '../../scripts/cloud/settings.mjs'
 import { compareStructures, readStructure } from '../../scripts/cloud/structure.mjs'
 import { refusedCommand } from '../../tools/windows/supabase-cli.mjs'
-import { addFictionalHistory, makeFictionalBackup, paragraph } from '../backup/fictional-data.mjs'
-import { cloudOnlyCases } from '../security/lib/cases.mjs'
+import { addFictionalHistory, makeFictionalBackup, paragraph, registerOwner } from '../backup/fictional-data.mjs'
+import { cases, cloudLiveCases, cloudOnlyCases } from '../security/lib/cases.mjs'
 import { loadMigrations } from '../security/lib/migrations.mjs'
 import { projectRoot } from '../security/lib/paths.mjs'
 import { recordResults } from '../security/lib/real-checks.mjs'
-import { buildReport } from '../security/lib/report.mjs'
+import { buildCloudReport, buildReport, cloudVerification } from '../security/lib/report.mjs'
+import { identities, seedSql } from '../security/lib/fixtures.mjs'
+import { runCases } from '../security/lib/run-cases.mjs'
 import { createMockDatabase } from '../security/mock/pglite-database.mjs'
 
 // Fictional project: none of these values belong to a real project.
@@ -299,6 +303,28 @@ describe('structure comparison', () => {
   })
 })
 
+/**
+ * A database like the cloud project in use: an owner and a TV with records
+ * of their own, with ids unlike those of the security checks' made-up people
+ * and of the fictional backup, as real (random) ids are.
+ */
+async function projectInUse() {
+  const db = await database()
+  const owner = '99999999-9999-4999-8999-999999999999'
+  await registerOwner(db, owner, 'Owner in use')
+  await db.exec(`
+    insert into auth.users (id) values ('98888888-8888-4888-8888-888888888888');
+    insert into private.identities (user_id, kind, owner_id, label) values ('98888888-8888-4888-8888-888888888888', 'tv', '${owner}', 'TV');
+    insert into public.contexts (id, owner_id, name, slug, show_on_tv) values
+      ('d9999999-0000-4000-8000-000000000001', '${owner}', 'Real-looking', 'real', true);
+    insert into public.tasks (owner_id, context_id, title, status) values
+      ('${owner}', 'd9999999-0000-4000-8000-000000000001', 'Kept task', 'open'),
+      ('${owner}', 'd9999999-0000-4000-8000-000000000001', 'Done task', 'done');
+    insert into public.notes (owner_id, context_id, title, content) values
+      ('${owner}', 'd9999999-0000-4000-8000-000000000001', 'Kept', '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Kept text"}]}]}');`)
+  return db
+}
+
 describe('restore drill (fictional data)', () => {
   async function counts(db) {
     return (await readProjectState(db)).counts
@@ -319,12 +345,28 @@ describe('restore drill (fictional data)', () => {
     expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, tasks: 0, notes: 0 })
   })
 
-  it('refuses a database that already holds records, and leaves them alone', async () => {
+  it('works beside the records of a project in use, and leaves every one of them exactly as it was', async () => {
+    const db = await projectInUse()
+    const before = await readDataFingerprint(db)
+    const result = await restoreDrill(db, await makeFictionalBackup())
+    expect(result.counts).toEqual({ contexts: 2, tasks: 5, notes: 4 })
+    expect(fingerprintChanges(before, await readDataFingerprint(db))).toEqual([])
+  })
+
+  it('a real restore still refuses any database that already holds records', async () => {
+    const { restoreBackup } = await import('../../scripts/backup/database.mjs')
     const db = await database()
     await addFictionalHistory(db)
-    const before = await counts(db)
-    await expect(restoreDrill(db, await makeFictionalBackup())).rejects.toThrow(/already holds/)
-    expect(await counts(db)).toEqual(before)
+    await registerOwner(db, '88888888-8888-4888-8888-888888888888', 'Target')
+    await expect(restoreBackup(db, await makeFictionalBackup(), '88888888-8888-4888-8888-888888888888')).rejects.toThrow(/already holds/)
+  })
+
+  it('fails, and changes nothing, if its records would clash with existing ones', async () => {
+    const db = await database()
+    await addFictionalHistory(db)
+    const before = await readDataFingerprint(db)
+    await expect(restoreDrill(db, await makeFictionalBackup())).rejects.toThrow(/refused the restore/)
+    expect(fingerprintChanges(before, await readDataFingerprint(db))).toEqual([])
   })
 
   it('fails, and undoes everything, when a record breaks a database rule', async () => {
@@ -392,26 +434,58 @@ describe('cloud results stay separate', () => {
   })
   const allIds = ['ACC-01', 'REAL-01', ...cloudOnlyCases.map((testCase) => testCase.id)]
 
-  it('a verified local stack says nothing about the cloud project', () => {
-    const report = buildReport({ ...base, real: passedAll(['ACC-01', 'REAL-01']), cloud: null })
-    expect(report).toContain('**Security status: VERIFIED on real Supabase')
-    expect(report).toContain('**Cloud project status: NOT VERIFIED.** No real personal data may be stored in the cloud project.')
-    expect(report).toContain('Cloud checks have never been run.')
-    expect(report).toContain(`| Cloud | 0 | 0 | ${allIds.length} | 0 | ${allIds.length} |`)
+  const liveIds = ['ACC-01', 'REAL-01', ...cloudLiveCases.map((testCase) => testCase.id)]
+  const cloudReport = (cloud, live = null) =>
+    buildCloudReport({ fingerprint: 'f1', mockResults: base.mockResults, realOnlyCases: base.realOnlyCases, cloudOnlyCases, cloudLiveCases, cloud, live })
+  const ids = {
+    access: ['ACC-01'],
+    realOnly: ['REAL-01'],
+    cloudOnly: cloudOnlyCases.map((testCase) => testCase.id),
+    live: cloudLiveCases.map((testCase) => testCase.id),
+  }
+
+  it('local and cloud results go in separate reports', () => {
+    const local = buildReport({ ...base, real: passedAll(['ACC-01', 'REAL-01']) })
+    expect(local).toContain('**Security status: VERIFIED on real Supabase')
+    expect(local).toContain('`docs/cloud-security-report.md`')
+    expect(local).not.toMatch(/Cloud project status|In-use check|CLOUD-0|LIVE-0/)
+
+    const cloud = cloudReport(null)
+    expect(cloud).toContain('# Nexus cloud security report')
+    expect(cloud).toContain('**Cloud project status: NOT VERIFIED for this version of the migrations.**')
+    expect(cloud).toContain('The full run has never been run.')
+    expect(cloud).not.toMatch(/Simulated \(PGlite\)|Real Supabase \|/)
   })
 
-  it('the cloud project is verified only when every check passed for the current migrations', () => {
-    const verified = buildReport({ ...base, real: null, cloud: passedAll(allIds, { project: 'abcd…qrst', postgres: '17.6' }) })
-    expect(verified).toContain('**Cloud project status: VERIFIED for this version of the migrations (project abcd…qrst).**')
-    expect(verified).toContain('**Security status: NOT VERIFIED on real Supabase.**')
-    expect(verified).toContain('on project abcd…qrst, PostgreSQL 17.6')
-
-    const stale = buildReport({ ...base, real: null, cloud: { ...passedAll(allIds), fingerprint: 'old' } })
-    expect(stale).toContain('**Cloud project status: NOT VERIFIED.**')
-
+  it('a full run that passed everything, for these migrations, verifies the cloud project', () => {
+    const report = cloudReport(passedAll(allIds, { project: 'abcd…qrst', postgres: '17.6' }))
+    expect(report).toContain('VERIFIED for this version of the migrations (project abcd…qrst), by the full run on the empty project.')
+    expect(report).toContain('on project abcd…qrst, PostgreSQL 17.6')
+    expect(cloudReport({ ...passedAll(allIds), fingerprint: 'old' })).toContain('NOT VERIFIED')
     const oneFailed = passedAll(allIds)
     oneFailed.results[0].status = 'failed'
-    expect(buildReport({ ...base, real: null, cloud: oneFailed })).toContain('**Cloud project status: NOT VERIFIED.**')
+    expect(cloudReport(oneFailed)).toContain('NOT VERIFIED')
+  })
+
+  it('after a migration, the in-use check verifies it only on top of an earlier full run', () => {
+    const earlierFull = { ...passedAll(allIds, { project: 'abcd…qrst' }), fingerprint: 'old' }
+    const inUse = passedAll(liveIds, { project: 'abcd…qrst', postgres: '17.6', mode: 'in use' })
+    expect(cloudVerification({ fingerprint: 'f1', ids, cloud: earlierFull, live: inUse })).toEqual({ verified: true, how: 'in use', project: 'abcd…qrst' })
+    expect(cloudReport(earlierFull, inUse)).toContain('by the check on the project in use')
+    // Without a full run that passed, the sign-in service was never proven.
+    const failedFull = { ...earlierFull, results: earlierFull.results.map((result) => ({ ...result, status: 'failed' })) }
+    expect(cloudVerification({ fingerprint: 'f1', ids, cloud: failedFull, live: inUse }).verified).toBe(false)
+    expect(cloudVerification({ fingerprint: 'f1', ids, cloud: null, live: inUse }).verified).toBe(false)
+    // A different project, a stale or a failed in-use check verifies nothing.
+    expect(cloudVerification({ fingerprint: 'f1', ids, cloud: earlierFull, live: { ...inUse, project: 'zzzz…zzzz' } }).verified).toBe(false)
+    expect(cloudVerification({ fingerprint: 'f2', ids, cloud: earlierFull, live: inUse }).verified).toBe(false)
+    const changedData = { ...inUse, results: inUse.results.map((result) => (result.id === 'LIVE-06' ? { ...result, status: 'failed' } : result)) }
+    expect(cloudVerification({ fingerprint: 'f1', ids, cloud: earlierFull, live: changedData }).verified).toBe(false)
+  })
+
+  it('the in-use check never claims the sign-in checks it does not run', () => {
+    const report = cloudReport(null, passedAll(liveIds, { project: 'abcd…qrst' }))
+    expect(report).toContain('| REAL-01 | A real check | Not executed | Passed |')
   })
 
   it('a check that never ran is recorded as not executed, never as an older result', async () => {
@@ -440,7 +514,13 @@ describe('cloud results stay separate', () => {
 
 describe('the Mac never reaches the cloud project', () => {
   it('every cloud command refuses before reading settings, on any computer but Windows', async () => {
-    for (const file of ['scripts/cloud/status.mjs', 'scripts/cloud/migrate.mjs', 'tests/security/cloud/run-cloud.mjs']) {
+    for (const file of [
+      'scripts/cloud/status.mjs',
+      'scripts/cloud/migrate.mjs',
+      'tests/security/cloud/run-cloud.mjs',
+      'tests/security/cloud/run-cloud-live.mjs',
+      'scripts/backup/backup-cloud.mjs',
+    ]) {
       const source = await readFile(join(projectRoot, file), 'utf8')
       const guard = source.indexOf("requireWindows('")
       expect(guard, file).toBeGreaterThan(-1)
@@ -448,11 +528,12 @@ describe('the Mac never reaches the cloud project', () => {
     }
   })
 
-  it.skipIf(process.platform === 'win32')('the cloud security run stops on this computer before doing anything', async () => {
+  it.skipIf(process.platform === 'win32')('the cloud security runs stop on this computer before doing anything', async () => {
     const { runCloud } = await import('../security/cloud/run-cloud.mjs')
-    await expect(runCloud({ suite: {}, fingerprint: 'f1', expectedIds: [], migrationVersions: [] })).rejects.toThrow(
-      /only on the Windows PC/,
-    )
+    const { runCloudLive } = await import('../security/cloud/run-cloud-live.mjs')
+    for (const run of [runCloud, runCloudLive]) {
+      await expect(run({ suite: {}, fingerprint: 'f1', expectedIds: [], migrationVersions: [] })).rejects.toThrow(/only on the Windows PC/)
+    }
   })
 
   it('secrets are never read from files or the environment', async () => {
@@ -466,21 +547,24 @@ describe('the Mac never reaches the cloud project', () => {
 describe('cloud sign-ins (Phase 3c-4b-3)', () => {
   const owner = { userId: 'o0000000-0000-4000-8000-000000000001', kind: 'owner', email: 'owner@example.test' }
 
-  it('are refused until the recorded cloud checks all passed, for this project and these migrations', async () => {
+  it('are refused until the cloud project is verified, for this project and these migrations', async () => {
     const { verificationProblem } = await import('../../scripts/cloud/accounts.mjs')
-    const expectedIds = ['ACC-01', 'CLOUD-01']
-    const recorded = {
+    const ids = { access: ['ACC-01'], realOnly: ['REAL-01'], cloudOnly: ['CLOUD-01'], live: ['LIVE-01'] }
+    const run = (list, extra = {}) => ({
       project: shortRef(REF),
       fingerprint: 'f1',
-      results: expectedIds.map((id) => ({ id, status: 'passed', detail: '' })),
-    }
-    const check = (results, fingerprint = 'f1') => verificationProblem(results, { fingerprint, projectRef: REF, expectedIds })
-    expect(check(recorded)).toBeNull()
-    expect(check(null)).toMatch(/have not been recorded/)
-    expect(check({ ...recorded, project: 'zzzz…zzzz' })).toMatch(/for project zzzz…zzzz/)
-    expect(check(recorded, 'f2')).toMatch(/migrations have changed/)
-    expect(check({ ...recorded, results: [recorded.results[0]] })).toMatch(/not every recorded cloud check passed \(CLOUD-01\)/)
-    expect(check({ ...recorded, results: [recorded.results[0], { id: 'CLOUD-01', status: 'failed' }] })).toMatch(/CLOUD-01/)
+      ...extra,
+      results: list.map((id) => ({ id, status: 'passed', detail: '' })),
+    })
+    const full = run(['ACC-01', 'REAL-01', 'CLOUD-01'])
+    const check = (runs, fingerprint = 'f1') => verificationProblem(runs, { fingerprint, projectRef: REF, ids })
+    expect(check({ cloud: full, live: null })).toBeNull()
+    expect(check({ cloud: null, live: null })).toMatch(/have not been recorded/)
+    expect(check({ cloud: { ...full, project: 'zzzz…zzzz' }, live: null })).toMatch(/for project zzzz…zzzz/)
+    expect(check({ cloud: full, live: null }, 'f2')).toMatch(/did not all pass for the current migrations/)
+    expect(check({ cloud: { ...full, results: [full.results[0]] }, live: null })).toMatch(/did not all pass/)
+    // After a migration: the in-use check, on top of the earlier full run.
+    expect(check({ cloud: { ...full, fingerprint: 'f0' }, live: run(['ACC-01', 'REAL-01', 'LIVE-01']) })).toBeNull()
   })
 
   it('allow exactly one owner, then TVs that show that owner', async () => {
@@ -614,5 +698,24 @@ describe('changing a cloud sign-in password (fictional accounts, fake Supabase)'
     expect(source).not.toMatch(/console\.\w+\([^)]*chosenPassword/)
     expect(source).toMatch(/secrets\.push\(chosenPassword\)/)
     expect(source).not.toMatch(/process\.argv[^\n]*password/i)
+  })
+})
+
+describe('the check on a project in use (fictional data)', () => {
+  it('runs every access check beside existing records and changes none of them', async () => {
+    const db = await projectInUse()
+    const before = await readDataFingerprint(db)
+    const results = await runCases(db, { cases, identities, seedSql })
+    expect(results.filter((result) => result.status !== 'passed').map((result) => `${result.id}: ${result.detail}`)).toEqual([])
+    expect(fingerprintChanges(before, await readDataFingerprint(db))).toEqual([])
+  })
+
+  it('notices any change to accounts, sign-ins, contexts, tasks or notes', async () => {
+    const db = await database()
+    await addFictionalHistory(db)
+    const before = await readDataFingerprint(db)
+    await db.exec(`update public.notes set pinned = not pinned where id = 'c0000000-0000-4000-8000-000000000002'`)
+    await db.exec(`insert into auth.users (id) values ('77777777-7777-4777-8777-777777777777')`)
+    expect(fingerprintChanges(before, await readDataFingerprint(db))).toEqual(['sign-in accounts: 2 before, 3 after', 'notes changed'])
   })
 })

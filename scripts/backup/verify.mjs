@@ -6,8 +6,8 @@
 // is then read back and compared with the backup. Nothing is written to disk
 // and nothing touches the Nexus database.
 //
-// PGlite is real PostgreSQL, but it is not Supabase. Restoring into a real
-// Supabase database is proved separately (Phase 3c-4b-2).
+// PGlite is real PostgreSQL, but it is not Supabase. Restoring into the real
+// cloud database is proved separately by the restore drill (fictional data).
 
 import { randomUUID } from 'node:crypto'
 import { loadMigrations } from '../../tests/security/lib/migrations.mjs'
@@ -17,7 +17,8 @@ import { BackupProblem, dataFingerprint } from './format.mjs'
 
 export const VERIFIED_WHERE =
   "This check used a temporary in-memory PostgreSQL database (PGlite) built from this project's migrations. " +
-  'It is not real Supabase: restoring into a real Supabase database is still to be proved (Phase 3c-4b-2).'
+  'It is not real Supabase. That the real cloud database accepts a restore is proved separately, with fictional ' +
+  'records, by the restore drill in the cloud security checks.'
 
 /**
  * Restores an already-read backup (see readBackup) into a disposable

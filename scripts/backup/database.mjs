@@ -180,6 +180,11 @@ export function asBackupProblem(error) {
  * The restore itself, inside a transaction the caller owns: restoreBackup
  * commits it; the cloud restore drill always undoes it.
  *
+ * emptyScope 'database' (every real restore) refuses unless contexts, tasks
+ * and notes are all empty. 'owner' is only for the drill, which restores
+ * fictional records for a stand-in owner inside a transaction that is always
+ * rolled back, in a project that may already hold real records.
+ *
  * 1. Records go in with every database rule active, so each note's document,
  *    links and searchable text are checked by the database itself, and every
  *    link between records is enforced.
@@ -189,17 +194,22 @@ export function asBackupProblem(error) {
  * 3. Everything is read back and must equal the backup exactly, including
  *    the searchable text the database derived in step 1.
  */
-export async function restoreRecords(db, backup, ownerId) {
+export async function restoreRecords(db, backup, ownerId, { emptyScope = 'database' } = {}) {
   const { data } = backup
   await checkStructure(db)
 
+  const ownerOnly = emptyScope === 'owner'
   const { rows: existing } = await db.query(
-    `select (select count(*) from public.contexts) + (select count(*) from public.tasks)
-          + (select count(*) from public.notes) as records`,
+    `select (select count(*) from public.contexts where $1::uuid is null or owner_id = $1::uuid)
+          + (select count(*) from public.tasks where $1::uuid is null or owner_id = $1::uuid)
+          + (select count(*) from public.notes where $1::uuid is null or owner_id = $1::uuid) as records`,
+    [ownerOnly ? ownerId : null],
   )
   if (Number(existing[0].records) !== 0) {
     throw new BackupProblem(
-      'The database to restore into already holds contexts, tasks or notes. A restore only ever goes into an empty database, so nothing is overwritten.',
+      ownerOnly
+        ? 'The stand-in owner already holds records. Nothing was restored.'
+        : 'The database to restore into already holds contexts, tasks or notes. A restore only ever goes into an empty database, so nothing is overwritten.',
     )
   }
   const { rows: owner } = await db.query(

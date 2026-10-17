@@ -24,8 +24,8 @@
 // It creates and deletes nothing, and changes no database table.
 
 import { loadMigrations, fingerprint } from '../../tests/security/lib/migrations.mjs'
-import { cases, cloudOnlyCases, realOnlyCases } from '../../tests/security/lib/cases.mjs'
-import { loadCloudResults } from '../../tests/security/lib/report.mjs'
+import { cases, cloudLiveCases, cloudOnlyCases, realOnlyCases } from '../../tests/security/lib/cases.mjs'
+import { loadCloudLiveResults, loadCloudResults } from '../../tests/security/lib/report.mjs'
 import { projectRoot, requireWindows } from '../../tools/windows/windows-only.mjs'
 import { generatePassword } from '../lib/passwords.mjs'
 import { accountPlan, findSignIn, parseAccountArguments, setPassword, verificationProblem } from './accounts.mjs'
@@ -78,11 +78,19 @@ try {
   // is given sign-ins. Changing an existing sign-in's password gives no new
   // access, so it is never held up by this.
   if (command !== 'password') {
-    const problem = verificationProblem(await loadCloudResults(), {
-      fingerprint: fingerprint(migrations),
-      projectRef: settings.projectRef,
-      expectedIds: [...cases, ...realOnlyCases, ...cloudOnlyCases].map((testCase) => testCase.id),
-    })
+    const problem = verificationProblem(
+      { cloud: await loadCloudResults(), live: await loadCloudLiveResults() },
+      {
+        fingerprint: fingerprint(migrations),
+        projectRef: settings.projectRef,
+        ids: {
+          access: cases.map((testCase) => testCase.id),
+          realOnly: realOnlyCases.map((testCase) => testCase.id),
+          cloudOnly: cloudOnlyCases.map((testCase) => testCase.id),
+          live: cloudLiveCases.map((testCase) => testCase.id),
+        },
+      },
+    )
     if (problem) throw new CloudProblem(`the cloud project is not verified: ${problem}`)
   }
 

@@ -62,6 +62,13 @@ results separately in `cloud/results.json` and the report's "Cloud" column.
 A verified local stack says nothing about the cloud project, and the reverse.
 Setup and steps: `docs/cloud-setup.md`.
 
+Once the cloud project is in use, `npm run test:security:cloud-live` checks it
+without changing anything: every access check and REAL-01 in transactions that
+are undone, LIVE-01 to LIVE-06 (including a before/after fingerprint of every
+record), and no accounts created. Its results go to `cloud/live-results.json`.
+Cloud results are reported in `docs/cloud-security-report.md`, separate from
+`docs/security-report.md`.
+
 `pg` and `supabase` are in `tools/windows/package.json`, installed only on
 the PC with `npm run setup:windows`. They are never installed on the work
 MacBook: the simulated checks do not need them, and the Windows tools refuse

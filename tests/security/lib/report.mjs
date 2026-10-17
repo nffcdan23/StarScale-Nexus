@@ -1,6 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { cloudResultsPath, realResultsPath, reportPath } from './paths.mjs'
+import { cloudLiveResultsPath, cloudReportPath, cloudResultsPath, realResultsPath, reportPath } from './paths.mjs'
+
+// Two reports, never mixed:
+//   docs/security-report.md        simulated checks (PGlite) and the real local stack;
+//   docs/cloud-security-report.md  the cloud project: the full run on the empty
+//                                  project, and the check on the project in use.
 
 async function loadResults(path) {
   try {
@@ -16,33 +21,40 @@ export function loadRealResults() {
   return loadResults(realResultsPath)
 }
 
-/** Results recorded by the last run against the cloud project, or null if there has never been one. */
+/** Results recorded by the last full run on the empty cloud project, or null. */
 export function loadCloudResults() {
   return loadResults(cloudResultsPath)
 }
 
-const NOT_EXECUTED = 'Not executed'
+/** Results recorded by the last check on the cloud project in use, or null. */
+export function loadCloudLiveResults() {
+  return loadResults(cloudLiveResultsPath)
+}
 
-/** What to print in a real column ("Real Supabase" or "Cloud") for one check. */
-function realStatus(id, real, currentFingerprint) {
-  const result = real?.results?.find((entry) => entry.id === id)
+const NOT_EXECUTED = 'Not executed'
+const NOT_PART = 'Not part of this check'
+
+/** What to print in a real column for one check. */
+function realStatus(id, run, currentFingerprint) {
+  const result = run?.results?.find((entry) => entry.id === id)
   if (!result || result.status === 'not-executed') return NOT_EXECUTED
   const word = result.status === 'passed' ? 'Passed' : 'FAILED'
   // Results from an older version of the migrations prove nothing about this one.
-  return real.fingerprint === currentFingerprint ? word : `Stale (${word.toLowerCase()}), re-run needed`
+  return run.fingerprint === currentFingerprint ? word : `Stale (${word.toLowerCase()}), re-run needed`
 }
 
 function lastRun(run, fingerprint, what) {
-  if (!run) return `${what[0].toUpperCase()}${what.slice(1)} checks have never been run.`
+  if (!run) return `The ${what} has never been run.`
   const where = run.project ? ` on project ${run.project}, PostgreSQL ${run.postgres}` : ''
   return (
-    `Last ${what} run: ${run.ranOn} on ${run.system}${where}, migrations fingerprint \`${run.fingerprint}\`` +
+    `Last ${what}: ${run.ranOn} on ${run.system}${where}, migrations fingerprint \`${run.fingerprint}\`` +
     (run.fingerprint === fingerprint ? ' (current).' : ' (older migrations: re-run needed).')
   )
 }
 
 const mockWord = (status) => (status === 'passed' ? 'Passed' : 'FAILED')
 const row = (cells) => `| ${cells.join(' | ')} |`
+const cell = (text) => String(text ?? '').replace(/\|/g, '/')
 
 function count(statuses) {
   return {
@@ -53,31 +65,39 @@ function count(statuses) {
   }
 }
 
-export function buildReport({
-  fingerprint,
-  applyResult,
-  staticResults,
-  mockResults,
-  selfTests,
-  realOnlyCases,
-  cloudOnlyCases = [],
-  real,
-  cloud = null,
-}) {
+function allPassed(run, ids) {
+  return Boolean(run) && ids.every((id) => run.results?.find((entry) => entry.id === id)?.status === 'passed')
+}
+
+/**
+ * Whether the cloud project is verified for these migrations, and how:
+ *   'full'    the full run on the empty project passed every check;
+ *   'in use'  the check on the project in use passed every check (database
+ *             rules, structure, restore drill, nothing changed) AND a full run
+ *             has passed before, which proved Supabase's sign-in service and
+ *             Data API with temporary accounts (REAL-02 to REAL-10). Those
+ *             checks need an empty project and do not depend on migrations
+ *             that leave sign-in alone.
+ * ids: { access, realOnly, cloudOnly, live } lists of check ids.
+ */
+export function cloudVerification({ fingerprint, ids, cloud, live }) {
+  const fullIds = [...ids.access, ...ids.realOnly, ...ids.cloudOnly]
+  const liveIds = [...ids.access, 'REAL-01', ...ids.live]
+  if (cloud?.fingerprint === fingerprint && allPassed(cloud, fullIds)) return { verified: true, how: 'full', project: cloud.project }
+  const signInProven = allPassed(cloud, fullIds)
+  if (live?.fingerprint === fingerprint && allPassed(live, liveIds) && signInProven && live.project === cloud.project) {
+    return { verified: true, how: 'in use', project: live.project }
+  }
+  return { verified: false, how: null, project: live?.project ?? cloud?.project ?? null }
+}
+
+export function buildReport({ fingerprint, applyResult, staticResults, mockResults, selfTests, realOnlyCases, real }) {
   const realAccess = mockResults.map((result) => realStatus(result.id, real, fingerprint))
   const realOnly = realOnlyCases.map((testCase) => realStatus(testCase.id, real, fingerprint))
   const mockCounts = count(mockResults.map((result) => mockWord(result.status)))
   const realCounts = count([...realAccess, ...realOnly])
   const realTotal = realAccess.length + realOnly.length
   const verified = realCounts.passed === realTotal
-
-  const cloudAccess = mockResults.map((result) => realStatus(result.id, cloud, fingerprint))
-  const cloudReal = realOnlyCases.map((testCase) => realStatus(testCase.id, cloud, fingerprint))
-  const cloudOnly = cloudOnlyCases.map((testCase) => realStatus(testCase.id, cloud, fingerprint))
-  const cloudCounts = count([...cloudAccess, ...cloudReal, ...cloudOnly])
-  const cloudTotal = cloudAccess.length + cloudReal.length + cloudOnly.length
-  const cloudVerified = cloud !== null && cloudCounts.passed === cloudTotal
-  const cloudDetail = (id) => cloud?.results?.find((entry) => entry.id === id)?.detail ?? ''
 
   const lines = [
     '# Nexus security test report',
@@ -90,15 +110,13 @@ export function buildReport({
       ? '**Security status: VERIFIED on real Supabase for this version of the migrations.**'
       : '**Security status: NOT VERIFIED on real Supabase.**',
     '',
-    cloudVerified
-      ? `**Cloud project status: VERIFIED for this version of the migrations (project ${cloud.project}).**`
-      : '**Cloud project status: NOT VERIFIED.** No real personal data may be stored in the cloud project.',
+    'This report covers the simulated checks and the real local Supabase stack on the',
+    'Windows PC. The cloud project has its own report: `docs/cloud-security-report.md`.',
     '',
     'A pass in the "Simulated" column means the rule behaved correctly inside PGlite, a',
     'PostgreSQL engine running with an imitation of Supabase\'s roles and signed-in user.',
     'It is not proof that real Supabase security works. Only the "Real Supabase" column',
-    '(the local stack on the Windows PC) and the "Cloud" column (the cloud project)',
-    'count as security passes, each for its own database only.',
+    'counts as a security pass.',
     '',
     '## Summary',
     '',
@@ -106,17 +124,12 @@ export function buildReport({
     row(['---', '---', '---', '---', '---', '---']),
     row(['Simulated (PGlite)', mockCounts.passed, mockCounts.failed, 0, 0, mockResults.length]),
     row(['Real Supabase', realCounts.passed, realCounts.failed, realCounts.notExecuted, realCounts.stale, realTotal]),
-    row(['Cloud', cloudCounts.passed, cloudCounts.failed, cloudCounts.notExecuted, cloudCounts.stale, cloudTotal]),
     '',
-    'Simulated rows count only checks run inside PGlite. Real Supabase rows count only',
-    'checks run against the real local Supabase stack, and Cloud rows only checks run',
-    'against the cloud project. A check is never counted in more than one.',
+    'Simulated rows count only checks run inside PGlite. Real rows count only checks',
+    'run against the real local Supabase stack. A check is never counted in both.',
     '',
-    lastRun(real, fingerprint, 'real Supabase'),
+    lastRun(real, fingerprint, 'real Supabase run'),
     ...(real?.aborted ? ['', `The last real run stopped early: ${real.aborted}`] : []),
-    '',
-    lastRun(cloud, fingerprint, 'cloud'),
-    ...(cloud?.aborted ? ['', `The last cloud run stopped early: ${cloud.aborted}`] : []),
     '',
     '## Migrations and written rules',
     '',
@@ -129,8 +142,8 @@ export function buildReport({
     '',
     '## Access checks',
     '',
-    row(['ID', 'Who', 'Check', 'Simulated (PGlite)', 'Real Supabase', 'Cloud']),
-    row(['---', '---', '---', '---', '---', '---']),
+    row(['ID', 'Who', 'Check', 'Simulated (PGlite)', 'Real Supabase']),
+    row(['---', '---', '---', '---', '---']),
     ...mockResults.map((result, index) =>
       row([
         result.id,
@@ -138,7 +151,6 @@ export function buildReport({
         result.title,
         result.status === 'passed' ? 'Passed' : `FAILED: ${result.detail}`,
         realAccess[index],
-        cloudAccess[index],
       ]),
     ),
     '',
@@ -146,21 +158,9 @@ export function buildReport({
     '',
     'These exercise Supabase\'s own sign-in service and Data API, which are not imitated.',
     '',
-    row(['ID', 'Check', 'Simulated (PGlite)', 'Real Supabase', 'Cloud']),
-    row(['---', '---', '---', '---', '---']),
-    ...realOnlyCases.map((testCase, index) =>
-      row([testCase.id, testCase.title, 'Not possible', realOnly[index], cloudReal[index]]),
-    ),
-    '',
-    '## Checks for the cloud project only',
-    '',
-    'Run by `npm run test:security:cloud` on the Windows PC, against the empty cloud project.',
-    '',
-    row(['ID', 'Check', 'Cloud', 'Detail']),
+    row(['ID', 'Check', 'Simulated (PGlite)', 'Real Supabase']),
     row(['---', '---', '---', '---']),
-    ...cloudOnlyCases.map((testCase, index) =>
-      row([testCase.id, testCase.title, cloudOnly[index], cloudDetail(testCase.id).replace(/\|/g, '/')]),
-    ),
+    ...realOnlyCases.map((testCase, index) => row([testCase.id, testCase.title, 'Not possible', realOnly[index]])),
     '',
     '## Self-test: do the checks notice a removed protection?',
     '',
@@ -176,7 +176,96 @@ export function buildReport({
   return lines.join('\n')
 }
 
-export async function writeReport(report) {
-  await mkdir(dirname(reportPath), { recursive: true })
-  await writeFile(reportPath, report, 'utf8')
+export function buildCloudReport({ fingerprint, mockResults, realOnlyCases, cloudOnlyCases, cloudLiveCases, cloud, live }) {
+  const ids = {
+    access: mockResults.map((result) => result.id),
+    realOnly: realOnlyCases.map((testCase) => testCase.id),
+    cloudOnly: cloudOnlyCases.map((testCase) => testCase.id),
+    live: cloudLiveCases.map((testCase) => testCase.id),
+  }
+  const status = cloudVerification({ fingerprint, ids, cloud, live })
+
+  const fullAccess = ids.access.map((id) => realStatus(id, cloud, fingerprint))
+  const fullReal = ids.realOnly.map((id) => realStatus(id, cloud, fingerprint))
+  const fullOnly = ids.cloudOnly.map((id) => realStatus(id, cloud, fingerprint))
+  const liveAccess = ids.access.map((id) => realStatus(id, live, fingerprint))
+  const liveReal = ids.realOnly.map((id) => (id === 'REAL-01' ? realStatus(id, live, fingerprint) : NOT_PART))
+  const liveOnly = ids.live.map((id) => realStatus(id, live, fingerprint))
+  const fullCounts = count([...fullAccess, ...fullReal, ...fullOnly])
+  const liveCounts = count([...liveAccess, ...liveReal.filter((value) => value !== NOT_PART), ...liveOnly])
+  const detail = (run, id) => cell(run?.results?.find((entry) => entry.id === id)?.detail)
+
+  const statusLine = status.verified
+    ? status.how === 'full'
+      ? `**Cloud project status: VERIFIED for this version of the migrations (project ${status.project}), by the full run on the empty project.**`
+      : `**Cloud project status: VERIFIED for this version of the migrations (project ${status.project}), by the check on the project in use; Supabase's sign-in service by the last full run.**`
+    : '**Cloud project status: NOT VERIFIED for this version of the migrations.**'
+
+  const lines = [
+    '# Nexus cloud security report',
+    '',
+    'Generated by `npm run test:security`. Do not edit by hand. The simulated and local',
+    'results are in `docs/security-report.md`; nothing here counts for the local stack.',
+    '',
+    `Migrations fingerprint: \`${fingerprint}\``,
+    '',
+    statusLine,
+    '',
+    'Two kinds of run, recorded separately:',
+    '',
+    '- **Full run** (`npm run test:security:cloud`): only on an empty project. Every access',
+    '  check, the sign-in and Data API checks with two temporary accounts, and CLOUD-01 to',
+    '  CLOUD-06.',
+    '- **In-use check** (`npm run test:security:cloud-live`): on the project holding your',
+    '  accounts and records. Every access check and REAL-01 inside transactions that are',
+    '  undone, no accounts created, and LIVE-01 to LIVE-06, including proof that every',
+    '  existing record is unchanged. The sign-in checks REAL-02 to REAL-10 stay proven by',
+    '  the last full run.',
+    '',
+    '## Summary',
+    '',
+    row(['Run', 'Passed', 'Failed', 'Not executed', 'Stale', 'Total']),
+    row(['---', '---', '---', '---', '---', '---']),
+    row(['Full run', fullCounts.passed, fullCounts.failed, fullCounts.notExecuted, fullCounts.stale, fullAccess.length + fullReal.length + fullOnly.length]),
+    row(['In-use check', liveCounts.passed, liveCounts.failed, liveCounts.notExecuted, liveCounts.stale, liveAccess.length + 1 + liveOnly.length]),
+    '',
+    lastRun(cloud, fingerprint, 'full run'),
+    ...(cloud?.aborted ? ['', `The last full run stopped early: ${cloud.aborted}`] : []),
+    '',
+    lastRun(live, fingerprint, 'in-use check'),
+    ...(live?.aborted ? ['', `The last in-use check stopped early: ${live.aborted}`] : []),
+    '',
+    '## In-use checks',
+    '',
+    row(['ID', 'Check', 'In-use check', 'Detail']),
+    row(['---', '---', '---', '---']),
+    ...cloudLiveCases.map((testCase, index) => row([testCase.id, testCase.title, liveOnly[index], detail(live, testCase.id)])),
+    '',
+    '## Full-run checks',
+    '',
+    row(['ID', 'Check', 'Full run', 'Detail']),
+    row(['---', '---', '---', '---']),
+    ...cloudOnlyCases.map((testCase, index) => row([testCase.id, testCase.title, fullOnly[index], detail(cloud, testCase.id)])),
+    '',
+    '## Sign-in and Data API checks',
+    '',
+    row(['ID', 'Check', 'Full run', 'In-use check']),
+    row(['---', '---', '---', '---']),
+    ...realOnlyCases.map((testCase, index) => row([testCase.id, testCase.title, fullReal[index], liveReal[index]])),
+    '',
+    '## Access checks',
+    '',
+    row(['ID', 'Who', 'Check', 'Full run', 'In-use check']),
+    row(['---', '---', '---', '---', '---']),
+    ...mockResults.map((result, index) => row([result.id, result.identity, result.title, fullAccess[index], liveAccess[index]])),
+    '',
+  ]
+  return lines.join('\n')
 }
+
+export async function writeReport(report, path = reportPath) {
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, report, 'utf8')
+}
+
+export { cloudReportPath }

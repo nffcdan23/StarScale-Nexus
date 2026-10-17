@@ -1,7 +1,8 @@
 # Backing up Nexus
 
-Phase 3c-4b-1. This guide covers backups of the **local** database on the
-Windows PC. Backups of the cloud database come in a later checkpoint.
+This guide covers backups of the **cloud project** (Phase 4a), where your
+real information lives, and of the **local** database on the Windows PC
+(Phase 3c-4b-1), which holds only test data. Both run on the Windows PC only.
 
 ## What a backup holds
 
@@ -56,23 +57,38 @@ in memory and disappears afterwards.
 
 **The limit of this proof:** the temporary database is PostgreSQL (PGlite)
 with a small imitation of Supabase, the same one the simulated security
-checks use. It is not real Supabase. Restoring into a real Supabase database
-must still be proved, and is part of the next checkpoint (3c-4b-2). Until
-then, treat a backup as proven against the project's database design, not
-against Supabase itself.
+checks use. It is not real Supabase. That the real cloud database accepts a
+restore is proved separately by the restore drill in the cloud security
+checks, with fictional records (a real backup cannot be restored beside the
+very records it copies).
 
-## Making a backup (Windows PC)
+## Backing up the cloud project (Windows PC)
 
-The local Supabase stack must be running, as it is when you use Nexus
-locally. In a terminal in the project folder:
+Needs `.env.cloud.local` and `supabase-ca.crt` (see `docs/cloud-setup.md`) and
+the database password, typed into a hidden prompt. No secret key. Docker is
+not needed. In a terminal in the project folder:
+
+```
+npm run backup:cloud
+```
+
+It connects only to your project, over an encrypted connection whose
+certificate it checks, and reads through a read-only connection: it cannot
+change, reset or overwrite anything. It saves
+`backups\nexus-cloud-<date>-<time>.json` and ends with `Backup verified` and a
+data fingerprint, or stops with a message in plain English.
+
+Back up before every database change (migration), and regularly anyway.
+
+## Backing up the local database (Windows PC)
+
+The local Supabase stack must be running. Then:
 
 ```
 npm run backup:local
 ```
 
-It reads the database through a read-only connection: it cannot change,
-reset or overwrite anything. It ends with `Backup verified` and a data
-fingerprint, or stops with a message in plain English.
+It works the same way, for the local test database.
 
 ## Checking a backup later
 
@@ -111,10 +127,10 @@ yourself.
 
 ## Restoring
 
-There is no restore into your real database yet. The restore code only ever
-writes into an **empty** database, all or nothing, so it cannot overwrite
-anything. It will be used to move your data into the cloud project, after
-backups have been proved against real Supabase (Phase 3c-4b-2 onwards).
+There is no command to restore into a real database yet: one would only be
+built, with its own approval, if a restore were ever needed. The restore code
+only ever writes into an **empty** database, all or nothing, so it cannot
+overwrite anything.
 
 ## For future changes
 

@@ -3,6 +3,7 @@
 // computer with fictional accounts and fake services; the command itself is
 // account.mjs.
 
+import { cloudVerification } from '../../tests/security/lib/report.mjs'
 import { CloudProblem, shortRef } from './settings.mjs'
 
 export const USAGE =
@@ -78,23 +79,22 @@ export async function setPassword({ settings, secretKey, userId, password, fetch
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
- * Why the cloud project must not be given accounts yet, or null if the
- * recorded cloud security checks (tests/security/cloud/results.json) all
- * passed, for this project and these migrations.
+ * Why the cloud project must not be given accounts yet, or null if it is
+ * verified for these migrations: by the full run on the empty project, or
+ * by the check on the project in use together with an earlier full run
+ * (see cloudVerification in tests/security/lib/report.mjs).
+ * runs: { cloud, live } as recorded in tests/security/cloud/.
  */
-export function verificationProblem(results, { fingerprint, projectRef, expectedIds }) {
-  if (!results) {
+export function verificationProblem({ cloud, live }, { fingerprint, projectRef, ids }) {
+  if (!cloud) {
     return 'the cloud security checks have not been recorded (tests/security/cloud/results.json is missing). Run npm run test:security:cloud first.'
   }
-  if (results.project !== shortRef(projectRef)) {
-    return `the recorded cloud checks are for project ${results.project}, not ${shortRef(projectRef)}.`
+  const status = cloudVerification({ fingerprint, ids, cloud, live })
+  if (status.verified && status.project !== shortRef(projectRef)) {
+    return `the recorded cloud checks are for project ${status.project}, not ${shortRef(projectRef)}.`
   }
-  if (results.fingerprint !== fingerprint) {
-    return 'the migrations have changed since the cloud checks were recorded, so the cloud project is not verified for them.'
-  }
-  const notPassed = expectedIds.filter((id) => results.results?.find((result) => result.id === id)?.status !== 'passed')
-  if (notPassed.length > 0) {
-    return `not every recorded cloud check passed (${notPassed.slice(0, 5).join(', ')}${notPassed.length > 5 ? ', ...' : ''}).`
+  if (!status.verified) {
+    return 'the recorded cloud checks did not all pass for the current migrations. Run npm run test:security:cloud-live and see docs/cloud-security-report.md.'
   }
   return null
 }

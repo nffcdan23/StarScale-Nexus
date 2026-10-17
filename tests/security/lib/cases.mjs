@@ -603,3 +603,18 @@ export const cloudOnlyCases = [
   { id: 'CLOUD-05', title: 'Restore drill: a fictional backup restores identically, only its owner with a code sees it, and it is fully undone' },
   { id: 'CLOUD-06', title: 'Afterwards the project is empty again: no accounts, sign-ins, contexts, tasks or notes' },
 ]
+
+/**
+ * Checks for the cloud project once it is in use (cloud/run-cloud-live.mjs),
+ * on top of every access check and REAL-01. No temporary accounts are made,
+ * so the sign-in checks REAL-02 to REAL-10 are not part of it: they stay
+ * proven by the last full run on the empty project. Recorded separately.
+ */
+export const cloudLiveCases = [
+  { id: 'LIVE-01', title: 'The publishable key and the database connection belong to this project, over a verified encrypted connection' },
+  { id: 'LIVE-02', title: 'Sign-in settings match supabase/config.toml: sign-ups off, email and password only' },
+  { id: 'LIVE-03', title: "The cloud database has exactly this project's migrations, in order" },
+  { id: 'LIVE-04', title: 'Tables, columns, rules, functions, triggers and permissions match the verified local database' },
+  { id: 'LIVE-05', title: 'Restore drill beside the existing records: a fictional backup restores identically, only its owner with a code sees it, and it is fully undone' },
+  { id: 'LIVE-06', title: 'Every existing account, sign-in, context, task and note is exactly as it was before the checks' },
+]
