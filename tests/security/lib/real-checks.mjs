@@ -7,6 +7,35 @@ import { runApiChecks } from '../real/api-checks.mjs'
 import { runCases } from './run-cases.mjs'
 
 /**
+ * REAL-01: every migration's main object exists. Shared by every real run;
+ * add one line per new migration.
+ */
+export async function migrationsPresent(db) {
+  const applied = await db.query(
+    `select to_regclass('public.tasks') is not null
+        and to_regprocedure('public.tv_summary()') is not null
+        and exists (select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'tasks' and column_name = 'due_on')
+        and pg_get_functiondef('public.tv_summary()'::regprocedure) like '%''due_on''%'
+        and to_regclass('public.notes') is not null
+        and to_regclass('public.projects') is not null
+        and exists (select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'notes' and column_name = 'project_id')
+        and exists (select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'tasks' and column_name = 'project_id')
+        and to_regprocedure('public.search_notes(text, boolean, uuid, uuid, boolean, boolean)') is not null
+      as ok`,
+  )
+  return {
+    id: 'REAL-01',
+    status: applied.rows[0].ok ? 'passed' : 'failed',
+    detail: applied.rows[0].ok
+      ? ''
+      : 'a migration is missing: check tasks, tasks.due_on, that tv_summary returns due_on, notes, projects, the project columns and search_notes',
+  }
+}
+
+/**
  * REAL-01, every access check, then the sign-in and Data API checks. Results
  * are pushed into the given list as they come, so a run that stops early
  * still records what it did.
@@ -15,22 +44,7 @@ import { runCases } from './run-cases.mjs'
  * config: { apiUrl, publishableKey, secretKey }.
  */
 export async function runRealChecks(db, config, suite, results) {
-  // Every migration's main object must exist; add one line per new migration.
-  const applied = await db.query(
-    `select to_regclass('public.tasks') is not null
-        and to_regprocedure('public.tv_summary()') is not null
-        and exists (select 1 from information_schema.columns
-                    where table_schema = 'public' and table_name = 'tasks' and column_name = 'due_on')
-        and pg_get_functiondef('public.tv_summary()'::regprocedure) like '%''due_on''%'
-        and to_regclass('public.notes') is not null
-        and to_regprocedure('public.search_notes(text, boolean, uuid)') is not null
-      as ok`,
-  )
-  results.push({
-    id: 'REAL-01',
-    status: applied.rows[0].ok ? 'passed' : 'failed',
-    detail: applied.rows[0].ok ? '' : 'a migration is missing: check tasks, tasks.due_on, that tv_summary returns due_on, notes and search_notes',
-  })
+  results.push(await migrationsPresent(db))
 
   // The same access checks as the simulated run, now against Supabase's own
   // roles, default permissions and auth functions.

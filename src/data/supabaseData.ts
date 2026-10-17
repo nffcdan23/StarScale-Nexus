@@ -12,6 +12,9 @@ import {
   type NotesService,
   type NoteSummary,
   type NoteVersion,
+  type Project,
+  type ProjectContents,
+  type ProjectsService,
   type SnippetPart,
   type Task,
   type TaskChanges,
@@ -23,13 +26,32 @@ import {
   limits,
 } from './types'
 
-// The only code that reads or writes contexts and tasks. Every request runs
-// with the signed-in owner's own session; the database decides what is
-// allowed.
+// The only code that reads or writes contexts, projects, tasks and notes.
+// Every request runs with the signed-in owner's own session; the database
+// decides what is allowed.
 
 const contextColumns = 'id, name, show_on_tv, archived_at, created_at'
 const taskColumns =
-  'id, context_id, title, notes, status, priority, hide_from_tv, due_on, due_at, completed_at, created_at, updated_at, archived_at'
+  'id, context_id, project_id, title, notes, status, priority, hide_from_tv, due_on, due_at, completed_at, created_at, updated_at, archived_at'
+const projectColumns = 'id, name, context_id, created_at, updated_at, archived_at'
+
+interface ProjectRow {
+  id: string
+  name: string
+  context_id: string | null
+  created_at: string
+  updated_at: string
+  archived_at: string | null
+}
+
+const toProject = (row: ProjectRow): Project => ({
+  id: row.id,
+  name: row.name,
+  contextId: row.context_id,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  archivedAt: row.archived_at,
+})
 
 interface ContextRow {
   id: string
@@ -42,6 +64,7 @@ interface ContextRow {
 interface TaskRow {
   id: string
   context_id: string
+  project_id: string | null
   title: string
   notes: string | null
   status: Task['status']
@@ -66,6 +89,7 @@ const toContext = (row: ContextRow): Context => ({
 const toTask = (row: TaskRow): Task => ({
   id: row.id,
   contextId: row.context_id,
+  projectId: row.project_id,
   title: row.title,
   notes: row.notes,
   status: row.status,
@@ -91,7 +115,10 @@ export function toDataError(error: PostgrestErrorLike | null | undefined, action
     return new DataError('refused', `Nexus refused to ${action}. Your sign-in may have ended; sign in again and retry.`)
   }
   if (code === '23514' || code === '22001') return new DataError('invalid', `Could not ${action}: a value was not accepted.`)
-  if (code === '23503') return new DataError('missing', `Could not ${action}: its context no longer exists.`)
+  if (code === '23503') {
+    const what = /_project_same_owner/.test(message) ? 'project' : 'context'
+    return new DataError('missing', `Could not ${action}: its ${what} no longer exists.`)
+  }
   if (code === 'PGRST116') return new DataError('missing', `Could not ${action}: it no longer exists.`)
   if (/fetch|network|failed to fetch/i.test(message) || code === '') {
     return new DataError('offline', `Could not ${action}: Nexus cannot reach the database. Nothing was changed.`)
@@ -165,6 +192,7 @@ export function taskChangesToRow(changes: TaskChanges): Record<string, unknown> 
   if (changes.priority !== undefined) row.priority = changes.priority
   if (changes.contextId !== undefined) row.context_id = changes.contextId
   if (changes.hideFromTv !== undefined) row.hide_from_tv = changes.hideFromTv
+  if (changes.projectId !== undefined) row.project_id = changes.projectId
   if (changes.deadline !== undefined) {
     // Both columns are always sent together, so switching between a date and a
     // time happens in one step and never breaks the one-kind-of-deadline rule.
@@ -209,13 +237,13 @@ function tasksService(client: SupabaseClient): TasksService {
       return (data as TaskRow[]).map(toTask)
     },
 
-    async create({ contextId, title: rawTitle }) {
+    async create({ contextId, title: rawTitle, projectId = null }) {
       const title = trimmed(rawTitle, 'task', limits.taskTitle)
       // The id is made here, so a retried request can never create a second copy.
       const id = crypto.randomUUID()
       const { data, error } = await client
         .from('tasks')
-        .insert({ id, context_id: contextId, title })
+        .insert({ id, context_id: contextId, title, ...(projectId ? { project_id: projectId } : {}) })
         .select(taskColumns)
         .single()
       if (!error) return toTask(data as TaskRow)
@@ -237,6 +265,91 @@ function tasksService(client: SupabaseClient): TasksService {
 
     setArchived: (id, archived) =>
       update(id, { archived_at: archived ? new Date().toISOString() : null }, archived ? 'archive the task' : 'restore the task'),
+
+    setProject: (id, projectId) => update(id, { project_id: projectId }, projectId ? 'move the task to the project' : 'take the task out of its project'),
+  }
+}
+
+/** Open tasks oldest first, then completed tasks newest first: how a project shows its tasks. */
+export function projectTaskOrder(a: Task, b: Task): number {
+  if (a.status !== b.status) return a.status === 'open' ? -1 : 1
+  return a.status === 'open' ? a.createdAt.localeCompare(b.createdAt) : (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
+}
+
+function projectsService(client: SupabaseClient): ProjectsService {
+  const duplicateName = new DataError('invalid', 'You already have an active project with that name. Choose another.')
+
+  const update = async (id: string, changes: Record<string, unknown>, action: string) => {
+    const { data, error } = await client.from('projects').update(changes).eq('id', id).select(projectColumns).single()
+    if (isDuplicate(error, 'projects_active_name_unique')) throw duplicateName
+    if (error) throw toDataError(error, action)
+    return toProject(data as ProjectRow)
+  }
+
+  return {
+    async list({ includeArchived = false } = {}) {
+      let query = client.from('projects').select(projectColumns).order('name')
+      if (!includeArchived) query = query.is('archived_at', null)
+      const { data, error } = await query
+      if (error) throw toDataError(error, 'load your projects')
+      return (data as ProjectRow[]).map(toProject)
+    },
+
+    async get(id) {
+      const { data, error } = await client.from('projects').select(projectColumns).eq('id', id).single()
+      if (error) throw toDataError(error, 'open the project')
+      return toProject(data as ProjectRow)
+    },
+
+    async create({ name: rawName, contextId = null }, options = {}) {
+      const name = trimmed(rawName, 'project', limits.projectName)
+      // The id is made on the device (or given), so a retried request can never create a second copy.
+      const id = options.id ?? crypto.randomUUID()
+      const { data, error } = await client
+        .from('projects')
+        .insert({ id, name, context_id: contextId })
+        .select(projectColumns)
+        .single()
+      if (!error) return toProject(data as ProjectRow)
+      if (isDuplicate(error, 'projects_pkey')) {
+        const existing = await client.from('projects').select(projectColumns).eq('id', id).single()
+        if (!existing.error) return toProject(existing.data as ProjectRow)
+      }
+      if (isDuplicate(error, 'projects_active_name_unique')) throw duplicateName
+      throw toDataError(error, 'create the project')
+    },
+
+    rename: (id, rawName) => update(id, { name: trimmed(rawName, 'project', limits.projectName) }, 'rename the project'),
+    setContext: (id, contextId) => update(id, { context_id: contextId }, 'change the project’s context'),
+    async setArchived(id, archived) {
+      try {
+        return await update(id, { archived_at: archived ? new Date().toISOString() : null }, archived ? 'archive the project' : 'restore the project')
+      } catch (error) {
+        if (error === duplicateName) {
+          throw new DataError('invalid', 'Another active project already has this name. Rename one of them first.')
+        }
+        throw error
+      }
+    },
+
+    async contents(id): Promise<ProjectContents> {
+      const [notes, tasks] = await Promise.all([
+        client
+          .from('notes')
+          .select(noteSummaryColumns)
+          .eq('project_id', id)
+          .is('archived_at', null)
+          .order('pinned', { ascending: false })
+          .order('updated_at', { ascending: false }),
+        client.from('tasks').select(taskColumns).eq('project_id', id).is('archived_at', null),
+      ])
+      if (notes.error) throw toDataError(notes.error, 'load the project’s notes')
+      if (tasks.error) throw toDataError(tasks.error, 'load the project’s tasks')
+      return {
+        notes: (notes.data as NoteSummaryRow[]).map(toNoteSummary),
+        tasks: (tasks.data as TaskRow[]).map(toTask).sort(projectTaskOrder),
+      }
+    },
   }
 }
 
@@ -287,12 +400,13 @@ function summaryService(client: SupabaseClient): SummaryService {
   }
 }
 
-const noteSummaryColumns = 'id, context_id, title, preview, pinned, revision, created_at, updated_at, archived_at'
+const noteSummaryColumns = 'id, context_id, project_id, title, preview, pinned, revision, created_at, updated_at, archived_at'
 const noteColumns = `${noteSummaryColumns}, content, content_text`
 
 interface NoteSummaryRow {
   id: string
   context_id: string | null
+  project_id: string | null
   title: string
   preview: string
   pinned: boolean
@@ -311,6 +425,7 @@ const toNoteSummary = (row: NoteSummaryRow): NoteSummary => ({
   id: row.id,
   title: row.title,
   contextId: row.context_id,
+  projectId: row.project_id,
   pinned: row.pinned,
   preview: row.preview,
   revision: row.revision,
@@ -377,8 +492,10 @@ function notesService(client: SupabaseClient): NotesService {
   }
 
   return {
-    async list({ archived = false } = {}) {
+    async list({ archived = false, projectId } = {}) {
       let query = client.from('notes').select(noteSummaryColumns)
+      if (projectId === null) query = query.is('project_id', null)
+      else if (projectId !== undefined) query = query.eq('project_id', projectId)
       query = archived
         ? query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
         : query.is('archived_at', null).order('pinned', { ascending: false }).order('updated_at', { ascending: false })
@@ -407,7 +524,7 @@ function notesService(client: SupabaseClient): NotesService {
       const id = options.id ?? crypto.randomUUID()
       const { data, error } = await client
         .from('notes')
-        .insert({ id, ...row })
+        .insert({ id, ...row, ...(options.projectId ? { project_id: options.projectId } : {}) })
         .select(noteColumns)
         .single()
       if (!error) return toNote(data as NoteRow)
@@ -442,13 +559,21 @@ function notesService(client: SupabaseClient): NotesService {
     setArchived: (id, archived) =>
       update(id, { archived_at: archived ? new Date().toISOString() : null }, archived ? 'archive the note' : 'restore the note'),
 
-    async search(text, { includeArchived = false, contextId } = {}) {
+    // Not an edit: the database leaves the revision and edit time alone.
+    setProject: (id, projectId) =>
+      update(id, { project_id: projectId }, projectId ? 'move the note to the project' : 'move the note to the Inbox'),
+
+    async search(text, { includeArchived = false, contextId, projectId, pinnedOnly = false } = {}) {
       if (text.length > limits.noteSearch) throw new DataError('invalid', `Keep searches to ${limits.noteSearch} characters.`)
       if (!text.trim()) return []
       const { data, error } = await client.rpc('search_notes', {
         search_text: text,
         include_archived: includeArchived,
         context_filter: contextId ?? null,
+        // Sent only when used, so a plain search is exactly the earlier call.
+        ...(projectId ? { project_filter: projectId } : {}),
+        ...(projectId === null ? { inbox_only: true } : {}),
+        ...(pinnedOnly ? { pinned_only: true } : {}),
       })
       if (error) throw toDataError(error, 'search your notes')
       return (data as Array<NoteSummaryRow & { snippet: string | null }>).map(
@@ -456,6 +581,7 @@ function notesService(client: SupabaseClient): NotesService {
           id: row.id,
           title: row.title,
           contextId: row.context_id,
+          projectId: row.project_id,
           pinned: row.pinned,
           archivedAt: row.archived_at,
           updatedAt: row.updated_at,
@@ -469,6 +595,7 @@ function notesService(client: SupabaseClient): NotesService {
 export function createSupabaseDataServices(client: SupabaseClient): DataServices {
   return {
     contexts: contextsService(client),
+    projects: projectsService(client),
     tasks: tasksService(client),
     summary: summaryService(client),
     notes: notesService(client),

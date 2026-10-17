@@ -363,3 +363,62 @@ describe('data layer against real Supabase (TV sign-in)', () => {
     await expect(tvData.contexts.create('Not allowed')).rejects.toThrow('Nexus refused')
   })
 })
+
+describe('projects against real Supabase (Phase 4b)', () => {
+  const paragraph = (text: string): NoteDoc => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+
+  it('creates, renames, archives and restores a project, with one active project per name', async () => {
+    const context = await ownerData.contexts.create('Projects context')
+    const project = await ownerData.projects.create({ name: 'Integration launch', contextId: context.id })
+    expect(project).toMatchObject({ name: 'Integration launch', contextId: context.id, archivedAt: null })
+    await expect(ownerData.projects.create({ name: ' integration LAUNCH ' })).rejects.toThrow('already have an active project')
+    expect((await ownerData.projects.rename(project.id, 'Integration launch renamed')).name).toBe('Integration launch renamed')
+    expect((await ownerData.projects.setArchived(project.id, true)).archivedAt).not.toBeNull()
+    expect((await ownerData.projects.list()).map((entry) => entry.id)).not.toContain(project.id)
+    expect((await ownerData.projects.list({ includeArchived: true })).map((entry) => entry.id)).toContain(project.id)
+    expect((await ownerData.projects.setArchived(project.id, false)).archivedAt).toBeNull()
+  })
+
+  it('moves notes and tasks into a project without copying them or changing a note revision', async () => {
+    const context = await ownerData.contexts.create('Linked context')
+    const project = await ownerData.projects.create({ name: 'Integration linking' })
+    const note = await ownerData.notes.create({ title: 'Linked note', content: paragraph('Quokkaberry plan') })
+    const moved = await ownerData.notes.setProject(note.id, project.id)
+    expect(moved).toMatchObject({ id: note.id, projectId: project.id, revision: note.revision, updatedAt: note.updatedAt })
+    const task = await ownerData.tasks.create({ contextId: context.id, title: 'Linked task', projectId: project.id })
+    const direct = await ownerData.notes.create({ title: 'Born in the project' }, { projectId: project.id })
+
+    const contents = await ownerData.projects.contents(project.id)
+    expect(contents.notes.map((entry) => entry.id).sort()).toEqual([note.id, direct.id].sort())
+    expect(contents.tasks.map((entry) => entry.id)).toEqual([task.id])
+    expect((await ownerData.notes.list({ projectId: project.id })).map((entry) => entry.id).sort()).toEqual([note.id, direct.id].sort())
+    expect((await ownerData.notes.list({ projectId: null })).map((entry) => entry.id)).not.toContain(note.id)
+
+    // An edit after the move still uses the same revision protection.
+    const saved = await ownerData.notes.save(note.id, { title: 'Linked note edited' }, note.revision)
+    expect(saved).toMatchObject({ revision: note.revision + 1, projectId: project.id })
+  })
+
+  it('searches one project, the Inbox and pinned notes', async () => {
+    const project = await ownerData.projects.create({ name: 'Integration search' })
+    const inProject = await ownerData.notes.create({ title: 'Platypusmint one', content: paragraph('Platypusmint') }, { projectId: project.id })
+    const inInbox = await ownerData.notes.create({ title: 'Platypusmint two', content: paragraph('Platypusmint') })
+    await ownerData.notes.setPinned(inInbox.id, true)
+    expect((await ownerData.notes.search('platypusmint', { projectId: project.id })).map((entry) => entry.id)).toEqual([inProject.id])
+    expect((await ownerData.notes.search('platypusmint', { projectId: null })).map((entry) => entry.id)).toEqual([inInbox.id])
+    expect((await ownerData.notes.search('platypusmint', { pinnedOnly: true })).map((entry) => entry.id)).toEqual([inInbox.id])
+    expect((await ownerData.notes.search('platypusmint')).find((entry) => entry.id === inProject.id)?.projectId).toBe(project.id)
+  })
+
+  it('gives the TV no projects, and the TV summary no project names', async () => {
+    const context = await ownerData.contexts.create('TV projects context')
+    await ownerData.contexts.setShowOnTv(context.id, true)
+    const project = await ownerData.projects.create({ name: 'Secret project name' })
+    await ownerData.tasks.create({ contextId: context.id, title: 'Visible project task', projectId: project.id })
+    expect(await tvData.projects.list({ includeArchived: true })).toEqual([])
+    await expect(tvData.projects.create({ name: 'From the TV' })).rejects.toThrow('Nexus refused')
+    const summary = JSON.stringify(await tvData.summary.get())
+    expect(summary).toContain('Visible project task')
+    expect(summary).not.toContain('Secret project name')
+  })
+})

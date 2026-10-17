@@ -6,14 +6,20 @@ real information lives, and of the **local** database on the Windows PC
 
 ## What a backup holds
 
-One file with your contexts, tasks and notes, exactly as the database stores
-them:
+One file with your contexts, projects, tasks and notes, exactly as the
+database stores them:
 
 - every note's title and formatted text (headings, lists, checklists, links,
   quotes, code), pinned and archived state, revision number and dates;
 - every task's details, deadline, priority, status, completion date and dates;
 - every context, including "Show on TV";
-- which context each task and note belongs to.
+- every project, with its context and archived state;
+- which context and project each task and note belongs to.
+
+Backups are in format 2 since Phase 4b. A database that does not have
+projects yet is backed up in format 1; format 1 backups always remain
+readable and restorable (as having no projects, every task and note in the
+Inbox).
 
 It never holds anything from sign-in: no account ids, email addresses,
 passwords, sessions, tokens or authenticator secrets. Accounts are created
@@ -89,6 +95,20 @@ npm run backup:local
 ```
 
 It works the same way, for the local test database.
+
+## Comparing two backups
+
+Around a database change (migration): back up, apply the change, back up
+again, then:
+
+```
+npm run backup:compare
+```
+
+It compares the two newest backups of the same database and ends with `The
+same records` when every context, project, task and note is unchanged and
+nothing was added or lost. Two particular files:
+`npm run backup:compare -- "<before>" "<after>"`.
 
 ## Checking a backup later
 

@@ -21,6 +21,9 @@ export const ids = {
   noteUncategorised: 'cccccccc-0000-4000-8000-000000000002',
   noteArchived: 'cccccccc-0000-4000-8000-000000000003',
   noteOther: 'cccccccc-0000-4000-8000-000000000004',
+  projectOwn: 'dddddddd-0000-4000-8000-000000000001',
+  projectArchived: 'dddddddd-0000-4000-8000-000000000002',
+  projectOther: 'dddddddd-0000-4000-8000-000000000003',
 }
 
 /** Text in a note's body that must never reach the TV. */
@@ -91,18 +94,23 @@ insert into public.contexts (id, owner_id, name, slug, show_on_tv) values
   ('${ids.contextPrivate}', '${ids.owner}', 'Personal', 'personal', false),
   ('${ids.contextOther}', '${ids.otherOwner}', 'Elsewhere', 'elsewhere', true);
 
-insert into public.tasks (id, owner_id, context_id, title, notes, status, hide_from_tv, archived_at) values
-  ('${ids.taskVisible}', '${ids.owner}', '${ids.contextVisible}', 'Visible task', '${secretNote}', 'open', false, null),
-  ('bbbbbbbb-0000-4000-8000-000000000002', '${ids.owner}', '${ids.contextVisible}', 'Hidden task', null, 'open', true, null),
-  ('bbbbbbbb-0000-4000-8000-000000000003', '${ids.owner}', '${ids.contextPrivate}', 'Private context task', null, 'open', false, null),
-  ('bbbbbbbb-0000-4000-8000-000000000004', '${ids.owner}', '${ids.contextVisible}', 'Finished task', null, 'done', false, null),
-  ('bbbbbbbb-0000-4000-8000-000000000005', '${ids.owner}', '${ids.contextVisible}', 'Archived task', null, 'open', false, now()),
-  ('${ids.taskOther}', '${ids.otherOwner}', '${ids.contextOther}', 'Other owner task', null, 'open', false, null);
+insert into public.projects (id, owner_id, name, context_id, archived_at) values
+  ('${ids.projectOwn}', '${ids.owner}', 'Nexus build', '${ids.contextVisible}', null),
+  ('${ids.projectArchived}', '${ids.owner}', 'Old launch', null, now()),
+  ('${ids.projectOther}', '${ids.otherOwner}', 'Elsewhere project', null, null);
 
-insert into public.notes (id, owner_id, context_id, title, content, archived_at) values
+insert into public.tasks (id, owner_id, context_id, title, notes, status, hide_from_tv, archived_at, project_id) values
+  ('${ids.taskVisible}', '${ids.owner}', '${ids.contextVisible}', 'Visible task', '${secretNote}', 'open', false, null, '${ids.projectOwn}'),
+  ('bbbbbbbb-0000-4000-8000-000000000002', '${ids.owner}', '${ids.contextVisible}', 'Hidden task', null, 'open', true, null, null),
+  ('bbbbbbbb-0000-4000-8000-000000000003', '${ids.owner}', '${ids.contextPrivate}', 'Private context task', null, 'open', false, null, null),
+  ('bbbbbbbb-0000-4000-8000-000000000004', '${ids.owner}', '${ids.contextVisible}', 'Finished task', null, 'done', false, null, null),
+  ('bbbbbbbb-0000-4000-8000-000000000005', '${ids.owner}', '${ids.contextVisible}', 'Archived task', null, 'open', false, now(), null),
+  ('${ids.taskOther}', '${ids.otherOwner}', '${ids.contextOther}', 'Other owner task', null, 'open', false, null, null);
+
+insert into public.notes (id, owner_id, context_id, title, content, archived_at, project_id) values
   ('${ids.noteFiled}', '${ids.owner}', '${ids.contextVisible}', 'Board meeting',
-    '${noteDoc(`Discuss the investor timeline ${secretNoteBody}`)}', null),
-  ('${ids.noteUncategorised}', '${ids.owner}', null, 'Shopping list', '${noteDoc('Buy milk and bread')}', null),
-  ('${ids.noteArchived}', '${ids.owner}', '${ids.contextVisible}', 'Old idea', '${noteDoc('An investor pitch from last year')}', now()),
-  ('${ids.noteOther}', '${ids.otherOwner}', '${ids.contextOther}', 'Other owner note', '${noteDoc('Investor notes elsewhere')}', null);
+    '${noteDoc(`Discuss the investor timeline ${secretNoteBody}`)}', null, '${ids.projectOwn}'),
+  ('${ids.noteUncategorised}', '${ids.owner}', null, 'Shopping list', '${noteDoc('Buy milk and bread')}', null, null),
+  ('${ids.noteArchived}', '${ids.owner}', '${ids.contextVisible}', 'Old idea', '${noteDoc('An investor pitch from last year')}', now(), null),
+  ('${ids.noteOther}', '${ids.otherOwner}', '${ids.contextOther}', 'Other owner note', '${noteDoc('Investor notes elsewhere')}', null, null);
 `

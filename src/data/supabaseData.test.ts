@@ -430,3 +430,165 @@ describe('notes', () => {
     expect(fakeNoteText(document)).toBe('Plan\nOne two\nthree\nCall the bank')
   })
 })
+
+describe('projects (Phase 4b)', () => {
+  const taskRow = {
+    id: 't1',
+    context_id: 'c1',
+    project_id: null,
+    title: 'Fictional task',
+    notes: null,
+    status: 'done',
+    priority: 'medium',
+    hide_from_tv: false,
+    due_on: null,
+    due_at: null,
+    completed_at: '2026-10-14T10:00:00Z',
+    created_at: 'a',
+    updated_at: 'b',
+    archived_at: null,
+  }
+  const noteRow = {
+    id: 'n1',
+    context_id: null,
+    project_id: null,
+    title: 'Fictional note',
+    preview: '',
+    pinned: false,
+    revision: 3,
+    created_at: 'a',
+    updated_at: 'b',
+    archived_at: null,
+    content: { type: 'doc', content: [] },
+    content_text: '',
+  }
+  const projectRow = {
+    id: 'p1',
+    name: 'Fictional launch',
+    context_id: 'c1',
+    created_at: '2026-10-17T10:00:00Z',
+    updated_at: '2026-10-17T10:00:00Z',
+    archived_at: null,
+  }
+
+  it('lists active projects by name, or all of them when asked', async () => {
+    const { services, calls } = recordingClient([{ data: [projectRow] }, { data: [] }])
+    expect(await services.projects.list()).toEqual([
+      { id: 'p1', name: 'Fictional launch', contextId: 'c1', createdAt: projectRow.created_at, updatedAt: projectRow.updated_at, archivedAt: null },
+    ])
+    await services.projects.list({ includeArchived: true })
+    expect(calls[0].table).toBe('projects')
+    expect(calls[0].steps).toContainEqual(['order', ['name']])
+    expect(calls[0].steps).toContainEqual(['is', ['archived_at', null]])
+    expect(stepNames(calls[1].steps)).not.toContain('is')
+  })
+
+  it('creates a project with an id made on the device, its trimmed name and optional context', async () => {
+    const { services, calls } = recordingClient([{ data: projectRow }])
+    await services.projects.create({ name: '  Fictional launch ', contextId: 'c1' })
+    const inserted = calls[0].steps.find(([name]) => name === 'insert')![1][0] as Record<string, unknown>
+    expect(Object.keys(inserted).sort()).toEqual(['context_id', 'id', 'name'])
+    expect(inserted.name).toBe('Fictional launch')
+    await expect(services.projects.create({ name: '   ' })).rejects.toThrow('Give the project a name.')
+    await expect(services.projects.create({ name: 'x'.repeat(81) })).rejects.toThrow('Keep the project to 80 characters.')
+  })
+
+  it('returns the existing project when a retried create reaches the database twice', async () => {
+    const { services } = recordingClient([
+      { error: { code: '23505', message: 'duplicate key value violates unique constraint "projects_pkey"' } },
+      { data: projectRow },
+    ])
+    expect((await services.projects.create({ name: 'Fictional launch' }, { id: 'p1' })).id).toBe('p1')
+  })
+
+  it('explains a name already used by an active project, on create, rename and restore', async () => {
+    const duplicate = { error: { code: '23505', message: 'duplicate key value violates unique constraint "projects_active_name_unique"' } }
+    const { services } = recordingClient([duplicate, duplicate, duplicate])
+    await expect(services.projects.create({ name: 'Taken' })).rejects.toThrow('already have an active project with that name')
+    await expect(services.projects.rename('p1', 'Taken')).rejects.toThrow('already have an active project with that name')
+    await expect(services.projects.setArchived('p1', false)).rejects.toThrow('Another active project already has this name')
+  })
+
+  it('archives and restores by changing only archived_at', async () => {
+    const { services, calls } = recordingClient([{ data: projectRow }, { data: projectRow }])
+    await services.projects.setArchived('p1', true)
+    await services.projects.setArchived('p1', false)
+    const updates = calls.map((call) => call.steps.find(([name]) => name === 'update')![1][0] as Record<string, unknown>)
+    expect(Object.keys(updates[0])).toEqual(['archived_at'])
+    expect(updates[1]).toEqual({ archived_at: null })
+  })
+
+  it("loads a project's active notes and unarchived tasks, open tasks first", async () => {
+    const open = { ...taskRow, id: 'open', status: 'open', completed_at: null, project_id: 'p1' }
+    const done = { ...taskRow, id: 'done', status: 'done', project_id: 'p1' }
+    const { services, calls } = recordingClient([{ data: [{ ...noteRow, project_id: 'p1' }] }, { data: [done, open] }])
+    const contents = await services.projects.contents('p1')
+    expect(contents.notes.map((note) => note.projectId)).toEqual(['p1'])
+    expect(contents.tasks.map((task) => task.id)).toEqual(['open', 'done'])
+    for (const call of calls) {
+      expect(call.steps).toContainEqual(['eq', ['project_id', 'p1']])
+      expect(call.steps).toContainEqual(['is', ['archived_at', null]])
+    }
+  })
+
+  it('moves a note by changing only project_id, so it is not an edit', async () => {
+    const { services, calls } = recordingClient([{ data: { ...noteRow, project_id: 'p1' } }, { data: { ...noteRow, project_id: null } }])
+    expect((await services.notes.setProject('n1', 'p1')).projectId).toBe('p1')
+    await services.notes.setProject('n1', null)
+    const updates = calls.map((call) => call.steps.find(([name]) => name === 'update')![1][0])
+    expect(updates).toEqual([{ project_id: 'p1' }, { project_id: null }])
+    for (const call of calls) expect(stepNames(call.steps)).not.toContain('maybeSingle')
+  })
+
+  it('lists the Inbox, one project, or every note', async () => {
+    const { services, calls } = recordingClient([{ data: [] }, { data: [] }, { data: [] }])
+    await services.notes.list({ projectId: null })
+    await services.notes.list({ projectId: 'p1' })
+    await services.notes.list()
+    expect(calls[0].steps).toContainEqual(['is', ['project_id', null]])
+    expect(calls[1].steps).toContainEqual(['eq', ['project_id', 'p1']])
+    expect(calls[2].steps.some(([, args]) => args[0] === 'project_id')).toBe(false)
+  })
+
+  it('creates a note directly in a project', async () => {
+    const { services, calls } = recordingClient([{ data: { ...noteRow, project_id: 'p1' } }])
+    await services.notes.create({ title: 'In the project' }, { id: 'n9', projectId: 'p1' })
+    const inserted = calls[0].steps.find(([name]) => name === 'insert')![1][0] as Record<string, unknown>
+    expect(inserted).toMatchObject({ id: 'n9', project_id: 'p1' })
+  })
+
+  it('puts a task in a project, or takes it out', async () => {
+    const { services, calls } = recordingClient([{ data: taskRow }, { data: taskRow }, { data: taskRow }])
+    await services.tasks.setProject('t1', 'p1')
+    await services.tasks.update('t1', { projectId: null })
+    await services.tasks.create({ contextId: 'c1', title: 'In the project', projectId: 'p1' })
+    expect(calls[0].steps.find(([name]) => name === 'update')![1][0]).toEqual({ project_id: 'p1' })
+    expect(calls[1].steps.find(([name]) => name === 'update')![1][0]).toEqual({ project_id: null })
+    expect(calls[2].steps.find(([name]) => name === 'insert')![1][0]).toMatchObject({ project_id: 'p1' })
+  })
+
+  it('searches one project, the Inbox or pinned notes, sending only the filters used', async () => {
+    const { services, calls } = recordingClient([{ data: [] }, { data: [] }, { data: [] }])
+    await services.notes.search('plan', { projectId: 'p1' })
+    await services.notes.search('plan', { projectId: null })
+    await services.notes.search('plan', { pinnedOnly: true })
+    expect(calls.map((call) => call.steps[0][1][0])).toEqual([
+      { search_text: 'plan', include_archived: false, context_filter: null, project_filter: 'p1' },
+      { search_text: 'plan', include_archived: false, context_filter: null, inbox_only: true },
+      { search_text: 'plan', include_archived: false, context_filter: null, pinned_only: true },
+    ])
+  })
+
+  it('says when a project, not a context, no longer exists', () => {
+    const projectGone = toDataError(
+      { code: '23503', message: 'insert or update on table "notes" violates foreign key constraint "notes_project_same_owner"' },
+      'move the note',
+    )
+    expect(projectGone.message).toBe('Could not move the note: its project no longer exists.')
+    const contextGone = toDataError(
+      { code: '23503', message: 'insert or update on table "projects" violates foreign key constraint "projects_context_same_owner"' },
+      'create the project',
+    )
+    expect(contextGone.message).toBe('Could not create the project: its context no longer exists.')
+  })
+})

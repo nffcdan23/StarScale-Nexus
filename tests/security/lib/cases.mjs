@@ -42,6 +42,8 @@ const readNotes = 'select id from public.notes'
 const addNote = "insert into public.notes (title) values ('New note')"
 const renameNotes = "update public.notes set title = 'Changed'"
 const searchNotes = (text) => `select * from public.search_notes('${text}')`
+const readProjects = 'select id, name from public.projects'
+const addProject = "insert into public.projects (name) values ('New project')"
 
 // ---- The checks -----------------------------------------------------------
 
@@ -568,6 +570,215 @@ export const cases = [
     expect: passes((rows) =>
       rows[0]?.content_text === richNote.text ? null : `got ${JSON.stringify(rows[0]?.content_text)}`,
     ),
+  },
+
+  // ---- Projects (Phase 4b) ------------------------------------------------
+  { id: 'PROJ-01', identity: 'anonymous', title: 'Cannot read projects', sql: readProjects, expect: tableRefused('projects') },
+  { id: 'PROJ-02', identity: 'tv', title: 'Sees no projects', sql: readProjects, expect: seesRows(0) },
+  { id: 'PROJ-03', identity: 'tvWithCode', title: 'Sees no projects even with its own authenticator', sql: readProjects, expect: seesRows(0) },
+  { id: 'PROJ-04', identity: 'ownerNoCode', title: 'Sees no projects without the authenticator code', sql: readProjects, expect: seesRows(0) },
+  { id: 'PROJ-05', identity: 'strangerWithCode', title: 'Sees no projects', sql: readProjects, expect: seesRows(0) },
+  {
+    id: 'PROJ-06',
+    identity: 'ownerWithCode',
+    title: "Sees their own two projects (active and archived) and nobody else's",
+    sql: readProjects,
+    expect: seesRows(2),
+  },
+  {
+    id: 'PROJ-07',
+    identity: 'ownerWithCode',
+    title: 'Can create a project under their own context; the database sets the owner',
+    sql: `insert into public.projects (name, context_id) values ('Launch plan', '${ids.contextVisible}') returning owner_id, context_id`,
+    expect: passes((rows) => (rows[0]?.owner_id === ids.owner && rows[0].context_id === ids.contextVisible ? null : `got ${JSON.stringify(rows)}`)),
+  },
+  {
+    id: 'PROJ-08',
+    identity: 'ownerWithCode',
+    title: "Cannot choose a project's owner",
+    sql: `insert into public.projects (owner_id, name) values ('${ids.otherOwner}', 'Planted')`,
+    expect: tableRefused('projects'),
+  },
+  { id: 'PROJ-09', identity: 'tv', title: 'Cannot create projects', sql: addProject, expect: blockedByRules },
+  { id: 'PROJ-10', identity: 'ownerNoCode', title: 'Cannot create projects without the authenticator code', sql: addProject, expect: blockedByRules },
+  {
+    id: 'PROJ-11',
+    identity: 'ownerWithCode',
+    title: 'Cannot have two active projects with the same name (ignoring case and spaces)',
+    sql: "insert into public.projects (name) values (' nexus BUILD ')",
+    expect: { errorCode: '23505' },
+  },
+  {
+    id: 'PROJ-12',
+    identity: 'ownerWithCode',
+    title: "Can reuse an archived project's name",
+    sql: "insert into public.projects (name) values ('Old launch')",
+    expect: changesRows(1),
+  },
+  {
+    id: 'PROJ-13',
+    identity: 'ownerWithCode',
+    title: 'Can archive a project and restore another',
+    sql: `update public.projects set archived_at = case when archived_at is null then now() end
+          where id in ('${ids.projectOwn}', '${ids.projectArchived}')`,
+    expect: changesRows(2),
+  },
+  {
+    id: 'PROJ-14',
+    identity: 'ownerWithCode',
+    title: 'Cannot restore an archived project while an active one has its name',
+    setup: `insert into public.projects (owner_id, name) values ('${ids.owner}', 'Old launch');`,
+    sql: `update public.projects set archived_at = null where id = '${ids.projectArchived}'`,
+    expect: { errorCode: '23505' },
+  },
+  { id: 'PROJ-15', identity: 'ownerWithCode', title: 'Cannot delete projects', sql: 'delete from public.projects', expect: tableRefused('projects') },
+  {
+    id: 'PROJ-16',
+    identity: 'ownerWithCode',
+    title: "Cannot change a project's owner or timestamps",
+    sql: `update public.projects set updated_at = now() where id = '${ids.projectOwn}'`,
+    expect: tableRefused('projects'),
+  },
+  {
+    id: 'PROJ-17',
+    identity: 'ownerWithCode',
+    title: "Cannot put a project under another owner's context",
+    sql: `insert into public.projects (name, context_id) values ('Borrowed', '${ids.contextOther}')`,
+    expect: { errorCode: '23503' },
+  },
+  {
+    id: 'PROJ-18',
+    identity: 'ownerWithCode',
+    title: "Cannot rename another owner's project",
+    sql: `update public.projects set name = 'Taken' where id = '${ids.projectOther}'`,
+    expect: changesRows(0),
+  },
+  { id: 'PROJ-19', identity: 'tv', title: 'Cannot rename projects', sql: "update public.projects set name = 'TV'", expect: changesRows(0) },
+
+  // ---- Notes and tasks in projects ----------------------------------------
+  {
+    id: 'LINK-01',
+    identity: 'ownerWithCode',
+    title: 'Can move a note into their own project without it counting as an edit',
+    sql: `update public.notes set project_id = '${ids.projectOwn}' where id = '${ids.noteUncategorised}' returning project_id, revision`,
+    expect: passes((rows) =>
+      rows[0]?.project_id === ids.projectOwn && rows[0].revision === 1 ? null : `got ${JSON.stringify(rows)}`,
+    ),
+  },
+  {
+    id: 'LINK-02',
+    identity: 'ownerWithCode',
+    title: "Cannot move a note into another owner's project",
+    sql: `update public.notes set project_id = '${ids.projectOther}' where id = '${ids.noteUncategorised}'`,
+    expect: { errorCode: '23503' },
+  },
+  {
+    id: 'LINK-03',
+    identity: 'ownerWithCode',
+    title: 'Can take a note out of its project, back to the Inbox',
+    sql: `update public.notes set project_id = null where id = '${ids.noteFiled}'`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'LINK-04',
+    identity: 'ownerWithCode',
+    title: 'Can create a note directly in their own project',
+    sql: `insert into public.notes (title, project_id) values ('In the project', '${ids.projectOwn}') returning project_id, revision`,
+    expect: passes((rows) => (rows[0]?.project_id === ids.projectOwn && rows[0].revision === 1 ? null : `got ${JSON.stringify(rows)}`)),
+  },
+  {
+    id: 'LINK-05',
+    identity: 'ownerWithCode',
+    title: "Cannot create a note in another owner's project",
+    sql: `insert into public.notes (title, project_id) values ('Planted', '${ids.projectOther}')`,
+    expect: { errorCode: '23503' },
+  },
+  {
+    id: 'LINK-06',
+    identity: 'ownerWithCode',
+    title: 'Can put a task in their own project',
+    sql: `update public.tasks set project_id = '${ids.projectOwn}' where id = 'bbbbbbbb-0000-4000-8000-000000000003'`,
+    expect: changesRows(1),
+  },
+  {
+    id: 'LINK-07',
+    identity: 'ownerWithCode',
+    title: "Cannot put a task in another owner's project",
+    sql: `update public.tasks set project_id = '${ids.projectOther}' where id = 'bbbbbbbb-0000-4000-8000-000000000003'`,
+    expect: { errorCode: '23503' },
+  },
+  {
+    id: 'LINK-08',
+    identity: 'ownerNoCode',
+    title: 'Cannot move notes without the authenticator code',
+    sql: `update public.notes set project_id = '${ids.projectOwn}'`,
+    expect: changesRows(0),
+  },
+  { id: 'LINK-09', identity: 'tv', title: 'Cannot move tasks between projects', sql: 'update public.tasks set project_id = null', expect: changesRows(0) },
+  {
+    id: 'LINK-10',
+    identity: 'tv',
+    title: 'The TV summary never mentions projects, even for a task in one',
+    sql: callSummary,
+    expect: passes((rows) => {
+      const text = JSON.stringify(rows[0]?.summary ?? null)
+      if (!text.includes('Visible task')) return 'the visible task is missing from the summary'
+      return /project|Nexus build/i.test(text) ? `the summary mentions a project: ${text}` : null
+    }),
+  },
+
+  // ---- Note search with projects ------------------------------------------
+  {
+    id: 'SRCH-01',
+    identity: 'ownerWithCode',
+    title: 'Search can keep to one project, and says which project each note is in',
+    sql: `select id, project_id from public.search_notes('investor', false, null, '${ids.projectOwn}')`,
+    expect: passes((rows) =>
+      rows.length === 1 && rows[0].id === ids.noteFiled && rows[0].project_id === ids.projectOwn ? null : `got ${JSON.stringify(rows)}`,
+    ),
+  },
+  {
+    id: 'SRCH-02',
+    identity: 'ownerWithCode',
+    title: 'Search can keep to the Inbox (notes in no project)',
+    sql: "select id from public.search_notes(search_text => 'investor', include_archived => true, inbox_only => true)",
+    expect: passes((rows) => (rows.length === 1 && rows[0].id === ids.noteArchived ? null : `got ${JSON.stringify(rows)}`)),
+  },
+  {
+    id: 'SRCH-03',
+    identity: 'ownerWithCode',
+    title: 'Search can keep to pinned notes',
+    setup: `update public.notes set pinned = true where id = '${ids.noteFiled}';`,
+    sql: "select id from public.search_notes(search_text => 'investor', include_archived => true, pinned_only => true)",
+    expect: passes((rows) => (rows.length === 1 && rows[0].id === ids.noteFiled ? null : `got ${JSON.stringify(rows)}`)),
+  },
+  {
+    id: 'SRCH-04',
+    identity: 'ownerWithCode',
+    title: 'Search still works when called the earlier way, as older app builds do',
+    sql: "select id from public.search_notes(search_text => 'investor', include_archived => false, context_filter => null)",
+    expect: passes((rows) => (rows.length === 1 && rows[0].id === ids.noteFiled ? null : `got ${JSON.stringify(rows)}`)),
+  },
+  {
+    id: 'SRCH-05',
+    identity: 'ownerWithCode',
+    title: "Searching another owner's project finds nothing",
+    sql: `select id from public.search_notes(search_text => 'investor', project_filter => '${ids.projectOther}')`,
+    expect: seesRows(0),
+  },
+  {
+    id: 'SRCH-06',
+    identity: 'tv',
+    title: 'Searching by project finds nothing',
+    sql: `select id from public.search_notes(search_text => 'investor', project_filter => '${ids.projectOwn}')`,
+    expect: seesRows(0),
+  },
+  {
+    id: 'SRCH-07',
+    identity: 'anonymous',
+    title: 'Cannot search by project',
+    sql: `select id from public.search_notes(search_text => 'investor', project_filter => '${ids.projectOwn}')`,
+    expect: refused(/permission denied for function search_notes/),
   },
 ]
 

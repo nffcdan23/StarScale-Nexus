@@ -7,7 +7,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { readBackupData, restoreBackup } from '../../scripts/backup/database.mjs'
+import { compareBackups, readBackupData, restoreBackup } from '../../scripts/backup/database.mjs'
 import { newestBackup, saveBackup, syncFolderWarning } from '../../scripts/backup/files.mjs'
 import { createBackup, readBackup, TABLE_NAMES, TABLES } from '../../scripts/backup/format.mjs'
 import { verifyBackup } from '../../scripts/backup/verify.mjs'
@@ -87,8 +87,9 @@ describe('backing up (fictional data)', () => {
     backup = await makeBackup(source)
   })
 
-  it("holds exactly the owner's contexts, tasks and notes, and nothing from sign-in", async () => {
-    expect(backup.counts).toEqual({ contexts: 2, tasks: 5, notes: 4 })
+  it("holds exactly the owner's contexts, projects, tasks and notes, and nothing from sign-in", async () => {
+    expect(backup.formatVersion).toBe(2)
+    expect(backup.counts).toEqual({ contexts: 2, projects: 2, tasks: 5, notes: 4 })
     for (const table of TABLE_NAMES) {
       for (const row of backup.data[table]) expect(Object.keys(row).sort()).toEqual(Object.keys(TABLES[table].columns).sort())
     }
@@ -99,7 +100,7 @@ describe('backing up (fictional data)', () => {
     expect(text).not.toMatch(/owner_id|password|email|secret|factor|token|session/i)
 
     const { otherRecords } = await readBackupData(source, { ownerId: OWNER })
-    expect(otherRecords).toBe(2)
+    expect(otherRecords).toBe(3)
   })
 
   it('reads in one read-only transaction and never writes', async () => {
@@ -183,7 +184,7 @@ describe('restoring (fictional data)', () => {
   it('refuses a database that already holds records, and changes nothing there', async () => {
     const target = await sourceDatabase()
     const before = await makeBackup(target)
-    await expect(restoreBackup(target, backup, OWNER)).rejects.toThrow(/already holds contexts, tasks or notes/)
+    await expect(restoreBackup(target, backup, OWNER)).rejects.toThrow(/already holds contexts, projects, tasks or notes/)
     expect((await makeBackup(target)).dataFingerprint).toBe(before.dataFingerprint)
   })
 
@@ -240,7 +241,7 @@ describe('checking a backup file', () => {
   it('rejects an incomplete file and anything that is not a Nexus backup', () => {
     expect(() => readBackup(text.slice(0, Math.floor(text.length / 2)))).toThrow(/damaged or incomplete/)
     expect(() => readBackup('{"hello": "world"}')).toThrow(/not a StarScale Nexus backup/)
-    expect(() => readBackup(text.replace('"formatVersion": 1', '"formatVersion": 2'))).toThrow(/format version 2/)
+    expect(() => readBackup(text.replace('"formatVersion": 2', '"formatVersion": 3'))).toThrow(/format version 3/)
   })
 
   it('rejects records whose links point outside the backup', () => {
@@ -283,5 +284,105 @@ describe('saving backups', () => {
     expect(gitignore).toContain('backups/')
     expect(syncFolderWarning('C:\\Users\\Fictional\\OneDrive\\Documents\\StarScale Nexus\\backups')).toMatch(/OneDrive/)
     expect(syncFolderWarning('C:\\Users\\Fictional\\Projects\\StarScale Nexus\\backups')).toBeNull()
+  })
+})
+
+describe('projects in backups (format 2)', () => {
+  it('restores projects and every link to them exactly, for the new owner', async () => {
+    const backup = await makeBackup(await sourceDatabase())
+    const { db, ownerId } = await emptyDatabase()
+    await restoreBackup(db, backup, ownerId)
+    const { rows: projects } = await db.query(
+      `select id, owner_id, name, context_id, archived_at is not null as archived,
+              to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') as created
+       from public.projects order by id`,
+    )
+    expect(projects).toEqual([
+      { id: fictional.projectLaunch, owner_id: ownerId, name: 'Fictional launch', context_id: WORK, archived: false, created: '2026-09-02T10:00:00.250000' },
+      { id: fictional.projectOld, owner_id: ownerId, name: 'Old fictional project', context_id: null, archived: true, created: '2026-08-01T10:00:00.000000' },
+    ])
+    const { rows: links } = await db.query(
+      `select 'note' as kind, id, project_id from public.notes where project_id is not null
+       union all select 'task', id, project_id from public.tasks where project_id is not null order by 2`,
+    )
+    expect(links).toEqual([
+      { kind: 'task', id: fictional.taskTimed, project_id: fictional.projectLaunch },
+      { kind: 'note', id: NOTE_RICH, project_id: fictional.projectLaunch },
+      { kind: 'note', id: NOTE_ARCHIVED, project_id: fictional.projectOld },
+    ])
+  })
+
+  it('rejects links to projects, or a project context, outside the backup', async () => {
+    const backup = await makeBackup(await sourceDatabase())
+    const noteOut = altered(backup, (data) => {
+      data.notes.find((note) => note.id === NOTE_LOOSE).project_id = randomUUID()
+    })
+    expect(() => readBackup(JSON.stringify(noteOut))).toThrow(/Note record .* belongs to a project that is not in the backup/)
+    const taskOut = altered(backup, (data) => {
+      data.tasks[1].project_id = randomUUID()
+    })
+    expect(() => readBackup(JSON.stringify(taskOut))).toThrow(/Task record .* belongs to a project that is not in the backup/)
+    const projectOut = altered(backup, (data) => {
+      data.projects[0].context_id = randomUUID()
+    })
+    expect(() => readBackup(JSON.stringify(projectOut))).toThrow(/Project record .* belongs to a context that is not in the backup/)
+  })
+})
+
+describe('backups made before projects existed (format 1)', () => {
+  const beforeProjects = migrations.filter((migration) => !migration.name.includes('_projects'))
+  const projectsMigration = migrations.find((migration) => migration.name.includes('_projects'))
+
+  async function databaseBeforeProjects() {
+    const db = await createMockDatabase(beforeProjects)
+    open.push(db)
+    await registerOwner(db, OWNER, 'Fictional owner')
+    await db.exec(`
+      insert into public.contexts (id, owner_id, name, slug, created_at, updated_at) values
+        ('${WORK}', '${OWNER}', 'Fictional Work', 'work', '2026-09-01T08:00:00.123456Z', '2026-09-02T09:30:00Z');
+      insert into public.tasks (id, owner_id, context_id, title, status) values
+        ('${TASK_DONE}', '${OWNER}', '${WORK}', 'Finished fictional errand', 'done');
+      insert into public.notes (id, owner_id, context_id, title, content) values
+        ('${NOTE_RICH}', '${OWNER}', '${WORK}', 'Fictional plan', '${JSON.stringify(richNote.doc).replaceAll("'", "''")}');`)
+    return db
+  }
+
+  it('are made in format 1 by a database without projects, and still restore', async () => {
+    const db = await databaseBeforeProjects()
+    const { data, migrations: versions, layout } = await readBackupData(db, { ownerId: OWNER })
+    expect(layout).toBe(1)
+    const file = createBackup({ data, source: { environment: 'local', migrations: versions }, formatVersion: 1 })
+    expect(file.formatVersion).toBe(1)
+    expect(Object.keys(file.data)).toEqual(['contexts', 'tasks', 'notes'])
+
+    const read = readBackup(JSON.stringify(file, null, 2))
+    expect(read).toMatchObject({ formatVersion: 2, upgradedFrom: 1, counts: { contexts: 1, projects: 0, tasks: 1, notes: 1 } })
+    expect(read.data.notes[0].project_id).toBeNull()
+    expect(read.data.tasks[0].project_id).toBeNull()
+    const result = await verifyBackup(read)
+    expect(result.fingerprint).toBe(read.dataFingerprint)
+  })
+
+  it('prove the projects migration changes no existing record', async () => {
+    const db = await databaseBeforeProjects()
+    const first = await readBackupData(db, { ownerId: OWNER })
+    const before = createBackup({ data: first.data, source: { environment: 'local', migrations: [] }, formatVersion: first.layout })
+    await db.exec(projectsMigration.sql)
+    const second = await readBackupData(db, { ownerId: OWNER })
+    expect(second.layout).toBe(2)
+    const after = createBackup({ data: second.data, source: { environment: 'local', migrations: [] }, formatVersion: second.layout })
+    expect(compareBackups(readBackup(JSON.stringify(before)), readBackup(JSON.stringify(after)))).toBeNull()
+
+    // And a real change is noticed.
+    await db.exec(`update public.notes set pinned = true where id = '${NOTE_RICH}'`)
+    const third = await readBackupData(db, { ownerId: OWNER })
+    const changed = createBackup({ data: third.data, source: { environment: 'local', migrations: [] } })
+    expect(compareBackups(readBackup(JSON.stringify(after)), readBackup(JSON.stringify(changed)))).toMatch(/notes record .*: pinned differs/)
+  })
+
+  it('refuse a database that matches neither layout', async () => {
+    const db = await databaseBeforeProjects()
+    await db.exec('alter table public.tasks add column project_id uuid')
+    await expect(readBackupData(db, { ownerId: OWNER })).rejects.toThrow(/does not match what the backup tool knows/)
   })
 })

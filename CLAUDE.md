@@ -513,6 +513,35 @@ plain English, define technical terms, and go one step at a time.
   assistants, AI Inbox classification, sub-folders inside a project; all as
   tables referencing `projects.id`, never a second hierarchy.
 
+- 4b (migration `20261018090000_projects.sql`): `projects` (owner, name 1 to
+  80 characters unique among active projects ignoring case and outer spaces,
+  optional same-owner context, touch trigger, archived_at; owner-only with
+  code; insert id, name, context_id; update name, context_id, archived_at;
+  no delete). `notes.project_id` and `tasks.project_id` with same-owner
+  composite foreign keys. `search_notes` replaced (drop and create) with
+  extra defaulted inputs project_filter, inbox_only, pinned_only and a
+  project_id result; the old three-argument call still works. tv_summary
+  unchanged. Security checks PROJ-01 to 19, LINK-01 to 10, SRCH-01 to 07;
+  self-tests 20 to 27; REAL-01 checks projects, the project columns and the
+  new search signature (`migrationsPresent` in `lib/real-checks.mjs`, shared
+  by every real run).
+- Data layer: `projects` service (list by name, get, create with a device
+  id, rename, setContext, setArchived, contents), `notes.setProject` (not an
+  edit), `notes.list({ projectId })` (null = Inbox), `notes.create(…, {
+  projectId })`, `notes.search({ projectId, pinnedOnly })` sending only the
+  filters used, `tasks.setProject` and `projectId` on tasks. The app must
+  not be rebuilt until both databases have the migration (older builds keep
+  working with the new database).
+- Backups: format 2 (LAYOUTS in `scripts/backup/format.mjs`: 1 before
+  projects, 2 with). `detectLayout` reads a database in whichever layout it
+  has; restores always go into layout 2 and finish with an explicit
+  same-owner check. Format 1 backups are upgraded in memory (no projects,
+  every task and note in the Inbox). `npm run backup:compare` proves a
+  migration changed no record.
+- The cloud in-use verification needs the earlier full run only for its
+  sign-in and CLOUD checks (REAL and CLOUD ids), so new access checks are
+  proven by the in-use check alone.
+
 ## Future: Files (roadmap only, recorded 17 October 2026)
 
 A dedicated Files section: Microsoft OneDrive and Google Drive (several
@@ -559,7 +588,7 @@ until the owner approves that phase.
   a `revoke all`, and explicit column-by-column grants in the same file.
 - `tests/security/`: the security checks. `docs/security-report.md`: their
   generated results.
-- Database model so far: `contexts`, `tasks` and `notes` in `public`;
+- Database model so far: `contexts`, `projects`, `tasks` and `notes` in `public`;
   `private.identities` registers which sign-ins are the owner or a TV;
   `public.tv_summary()` is the only function that reads past the access rules
   (`public.search_notes()` runs with the caller's rights). Nothing can be
@@ -675,7 +704,11 @@ implement any of these until the owner asks.
   privacy): built on the Mac 17 October 2026; awaiting PC checks.
 - Phase 4 (core workspace) plan approved 17 October 2026, see below. 4a
   cloud backup and in-use cloud checks: built on the Mac 17 October 2026;
-  awaiting PC verification. Next: 4b, only with the owner's approval.
+  verified on the PC 17 October 2026 (cloud backup, 102 of 102 in-use checks).
+- 4b projects database, data layer, security checks, backup format 2:
+  built on the Mac 17 October 2026; awaiting the local and cloud migration
+  on the PC (`docs/cloud-setup.md`, Applying a new migration). Next: 4c,
+  only with the owner's approval.
 - 3 Hands-off TV after Windows sign-in. Optional: 3b scheduled power-on,
   3c restricted display account. Never automatic sign-in on the main account.
 - 4 Daily-use version: pages built from the designs, manual backup and restore.

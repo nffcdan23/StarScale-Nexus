@@ -83,7 +83,7 @@ export const mutations = [
   {
     id: 'SELFTEST-15',
     title: 'Default permission left in place on note search',
-    apply: remove('revoke all on function public.search_notes(text, boolean, uuid) from public, anon, authenticated;'),
+    apply: remove('revoke all on function public.search_notes(text, boolean, uuid, uuid, boolean, boolean) from public, anon, authenticated;'),
   },
   {
     id: 'SELFTEST-16',
@@ -111,6 +111,50 @@ export const mutations = [
       sql.replace(
         'grant update (context_id, title, content, pinned, archived_at) on table public.notes',
         'grant update (context_id, title, content, pinned, archived_at, revision) on table public.notes',
+      ),
+  },
+  {
+    id: 'SELFTEST-20',
+    title: 'Row-level security switched off on projects',
+    apply: remove('alter table public.projects enable row level security;'),
+  },
+  {
+    id: 'SELFTEST-21',
+    title: 'Second-factor rule removed from projects',
+    apply: (sql) => sql.replace(/create policy projects_owner_with_second_factor[\s\S]*?;\n/, ''),
+  },
+  {
+    id: 'SELFTEST-22',
+    title: 'Default access left in place on projects',
+    apply: remove('revoke all on table public.projects from public, anon, authenticated;'),
+  },
+  {
+    id: 'SELFTEST-23',
+    title: 'Notes no longer kept to projects of the same owner',
+    apply: (sql) => sql.replace(/alter table public\.notes\s+add constraint notes_project_same_owner[^;]*;/, ''),
+  },
+  {
+    id: 'SELFTEST-24',
+    title: 'Tasks no longer kept to projects of the same owner',
+    apply: (sql) => sql.replace(/alter table public\.tasks\s+add constraint tasks_project_same_owner[^;]*;/, ''),
+  },
+  {
+    id: 'SELFTEST-25',
+    title: 'Two active projects allowed the same name',
+    apply: (sql) => sql.replace(/create unique index projects_active_name_unique[^;]*;/, ''),
+  },
+  {
+    id: 'SELFTEST-26',
+    title: 'Search ignores the project filter',
+    apply: remove('and (project_filter is null or n.project_id = project_filter)'),
+  },
+  {
+    id: 'SELFTEST-27',
+    title: "Owner allowed to choose a project's owner",
+    apply: (sql) =>
+      sql.replace(
+        'grant insert (id, name, context_id) on table public.projects',
+        'grant insert (id, owner_id, name, context_id) on table public.projects',
       ),
   },
 ]

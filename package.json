@@ -23,6 +23,7 @@
     "backup:local": "node scripts/backup/backup-local.mjs",
     "backup:cloud": "node scripts/backup/backup-cloud.mjs",
     "backup:verify": "node scripts/backup/verify-backup.mjs",
+    "backup:compare": "node scripts/backup/compare-backups.mjs",
     "cloud:status": "node scripts/cloud/status.mjs",
     "cloud:migrate": "node scripts/cloud/migrate.mjs",
     "cloud:account": "node scripts/cloud/account.mjs",

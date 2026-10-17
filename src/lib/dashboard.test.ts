@@ -21,6 +21,7 @@ function task(title: string, deadline: Deadline, changes: Partial<Task> = {}): T
   return {
     id: title,
     contextId: 'c1',
+    projectId: null,
     title,
     notes: null,
     status: 'open',

@@ -33,28 +33,9 @@ import { askDatabasePassword, confirmProject } from '../../../scripts/cloud/prom
 import { CloudProblem, loadCloudSettings, redact, shortRef } from '../../../scripts/cloud/settings.mjs'
 import { requireWindows } from '../../../tools/windows/windows-only.mjs'
 import { cloudLiveResultsPath, projectRoot } from '../lib/paths.mjs'
-import { recordResults } from '../lib/real-checks.mjs'
+import { migrationsPresent, recordResults } from '../lib/real-checks.mjs'
 import { runCases } from '../lib/run-cases.mjs'
 import { drillCheck, structureCheck } from './shared.mjs'
-
-/** REAL-01: every migration's main object exists (the same test as the other real runs). */
-async function migrationsPresent(db) {
-  const applied = await db.query(
-    `select to_regclass('public.tasks') is not null
-        and to_regprocedure('public.tv_summary()') is not null
-        and exists (select 1 from information_schema.columns
-                    where table_schema = 'public' and table_name = 'tasks' and column_name = 'due_on')
-        and pg_get_functiondef('public.tv_summary()'::regprocedure) like '%''due_on''%'
-        and to_regclass('public.notes') is not null
-        and to_regprocedure('public.search_notes(text, boolean, uuid)') is not null
-      as ok`,
-  )
-  return {
-    id: 'REAL-01',
-    status: applied.rows[0].ok ? 'passed' : 'failed',
-    detail: applied.rows[0].ok ? '' : 'a migration is missing',
-  }
-}
 
 /**
  * Runs the checks for a project in use and records the outcome. Problems

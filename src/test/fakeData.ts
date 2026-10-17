@@ -1,4 +1,4 @@
-import { noteChangesToRow, taskChangesToRow } from '../data/supabaseData'
+import { noteChangesToRow, projectTaskOrder, taskChangesToRow } from '../data/supabaseData'
 import {
   DataError,
   limits,
@@ -8,6 +8,7 @@ import {
   type NoteDoc,
   type NoteSummary,
   type Priority,
+  type Project,
   type Task,
   type TaskView,
 } from '../data/types'
@@ -39,6 +40,7 @@ const now = () => new Date((clock += 1000)).toISOString()
 
 export class FakeData implements DataServices {
   contextRows: Context[] = []
+  projectRows: Project[] = []
   taskRows: Task[] = []
   noteRows: Note[] = []
   /** When set, the next write fails with this error (then clears). */
@@ -70,6 +72,25 @@ export class FakeData implements DataServices {
     return context
   }
 
+  private findProject(id: string) {
+    const project = this.projectRows.find((entry) => entry.id === id)
+    if (!project) throw new DataError('missing', 'Could not change it: its project no longer exists.')
+    return project
+  }
+
+  /** Like the database's rule: one active project per name, ignoring case and outer spaces. */
+  private nameTaken(name: string, exceptId?: string) {
+    const key = name.trim().toLowerCase()
+    return this.projectRows.some((project) => !project.archivedAt && project.id !== exceptId && project.name.trim().toLowerCase() === key)
+  }
+
+  addProject(name: string, changes: Partial<Project> = {}): Project {
+    const stamp = now()
+    const project: Project = { id: crypto.randomUUID(), name, contextId: null, createdAt: stamp, updatedAt: stamp, archivedAt: null, ...changes }
+    this.projectRows.push(project)
+    return project
+  }
+
   addContext(name: string, showOnTv = false): Context {
     const context = { id: crypto.randomUUID(), name, showOnTv, archivedAt: null, createdAt: now() }
     this.contextRows.push(context)
@@ -81,6 +102,7 @@ export class FakeData implements DataServices {
     const task: Task = {
       id: crypto.randomUUID(),
       contextId,
+      projectId: null,
       title,
       notes: null,
       status: 'open',
@@ -128,6 +150,80 @@ export class FakeData implements DataServices {
     },
   }
 
+  /**
+   * An imitation of the projects table. Ownership, the second factor and the
+   * same-owner links are the database's job and are proved by the security
+   * checks, never by this.
+   */
+  projects: DataServices['projects'] = {
+    list: async ({ includeArchived = false } = {}) => {
+      this.checkRead()
+      return this.projectRows
+        .filter((project) => includeArchived || !project.archivedAt)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((project) => ({ ...project }))
+    },
+    get: async (id) => {
+      this.checkRead()
+      return { ...this.findProject(id) }
+    },
+    create: async ({ name, contextId = null }, options = {}) => {
+      const trimmed = name.trim()
+      if (!trimmed) throw new DataError('invalid', 'Give the project a name.')
+      if (trimmed.length > limits.projectName) throw new DataError('invalid', `Keep the project to ${limits.projectName} characters.`)
+      this.takeFailure()
+      const existing = options.id && this.projectRows.find((entry) => entry.id === options.id)
+      if (existing) return { ...existing }
+      if (contextId) this.findContext(contextId)
+      if (this.nameTaken(trimmed)) throw new DataError('invalid', 'You already have an active project with that name. Choose another.')
+      return { ...this.addProject(trimmed, { contextId, ...(options.id ? { id: options.id } : {}) }) }
+    },
+    rename: async (id, name) => {
+      const trimmed = name.trim()
+      if (!trimmed) throw new DataError('invalid', 'Give the project a name.')
+      this.takeFailure()
+      const project = this.findProject(id)
+      if (!project.archivedAt && this.nameTaken(trimmed, id)) {
+        throw new DataError('invalid', 'You already have an active project with that name. Choose another.')
+      }
+      project.name = trimmed
+      project.updatedAt = now()
+      return { ...project }
+    },
+    setContext: async (id, contextId) => {
+      this.takeFailure()
+      const project = this.findProject(id)
+      if (contextId) this.findContext(contextId)
+      project.contextId = contextId
+      project.updatedAt = now()
+      return { ...project }
+    },
+    setArchived: async (id, archived) => {
+      this.takeFailure()
+      const project = this.findProject(id)
+      if (!archived && this.nameTaken(project.name, id)) {
+        throw new DataError('invalid', 'Another active project already has this name. Rename one of them first.')
+      }
+      project.archivedAt = archived ? now() : null
+      project.updatedAt = now()
+      return { ...project }
+    },
+    contents: async (id) => {
+      this.checkRead()
+      this.findProject(id)
+      return {
+        notes: this.noteRows
+          .filter((note) => note.projectId === id && !note.archivedAt)
+          .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt))
+          .map((note) => this.noteSummary(note)),
+        tasks: this.taskRows
+          .filter((task) => task.projectId === id && !task.archivedAt)
+          .map((task) => ({ ...task }))
+          .sort(projectTaskOrder),
+      }
+    },
+  }
+
   tasks: DataServices['tasks'] = {
     list: async (view: TaskView) => {
       this.checkRead()
@@ -147,10 +243,11 @@ export class FakeData implements DataServices {
         .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
         .map((task) => ({ ...task }))
     },
-    create: async ({ contextId, title }) => {
+    create: async ({ contextId, title, projectId = null }) => {
       this.takeFailure()
       this.findContext(contextId)
-      return { ...this.addTask(contextId, title.trim()) }
+      if (projectId) this.findProject(projectId)
+      return { ...this.addTask(contextId, title.trim(), { projectId }) }
     },
     update: async (id, changes) => {
       // The same checks as the real data layer, before anything is changed.
@@ -158,6 +255,8 @@ export class FakeData implements DataServices {
       this.takeFailure()
       const task = this.findTask(id)
       if (changes.contextId !== undefined) this.findContext(changes.contextId)
+      if (changes.projectId) this.findProject(changes.projectId)
+      if (changes.projectId !== undefined) task.projectId = changes.projectId
       if (changes.title !== undefined) task.title = changes.title.trim()
       if (changes.notes !== undefined) task.notes = changes.notes?.trim() || null
       if (changes.priority !== undefined) task.priority = changes.priority
@@ -179,6 +278,14 @@ export class FakeData implements DataServices {
       this.takeFailure()
       const task = this.findTask(id)
       task.archivedAt = archived ? now() : null
+      task.updatedAt = now()
+      return { ...task }
+    },
+    setProject: async (id, projectId) => {
+      this.takeFailure()
+      const task = this.findTask(id)
+      if (projectId) this.findProject(projectId)
+      task.projectId = projectId
       task.updatedAt = now()
       return { ...task }
     },
@@ -217,7 +324,9 @@ export class FakeData implements DataServices {
     },
   }
 
-  addNote(changes: { title?: string; text?: string; contextId?: string | null; pinned?: boolean; archivedAt?: string | null } = {}): Note {
+  addNote(
+    changes: { title?: string; text?: string; contextId?: string | null; projectId?: string | null; pinned?: boolean; archivedAt?: string | null } = {},
+  ): Note {
     const stamp = now()
     const content = paragraphDoc(changes.text ?? '')
     const text = fakeNoteText(content).trim()
@@ -225,6 +334,7 @@ export class FakeData implements DataServices {
       id: crypto.randomUUID(),
       title: changes.title ?? '',
       contextId: changes.contextId ?? null,
+      projectId: changes.projectId ?? null,
       pinned: changes.pinned ?? false,
       preview: text.slice(0, 200),
       revision: 1,
@@ -267,6 +377,7 @@ export class FakeData implements DataServices {
       id: note.id,
       title: note.title,
       contextId: note.contextId,
+      projectId: note.projectId,
       pinned: note.pinned,
       preview: note.preview,
       revision: note.revision,
@@ -282,10 +393,11 @@ export class FakeData implements DataServices {
    * database's job and are proved by the security checks, never by this.
    */
   notes: DataServices['notes'] = {
-    list: async ({ archived = false } = {}) => {
+    list: async ({ archived = false, projectId } = {}) => {
       this.checkRead()
       return this.noteRows
         .filter((note) => Boolean(note.archivedAt) === archived)
+        .filter((note) => projectId === undefined || note.projectId === projectId)
         .sort((a, b) =>
           archived
             ? (b.archivedAt ?? '').localeCompare(a.archivedAt ?? '')
@@ -308,7 +420,8 @@ export class FakeData implements DataServices {
       // Like the database's primary key: the same id never makes a second note.
       const existing = options.id && this.noteRows.find((entry) => entry.id === options.id)
       if (existing) return structuredClone(existing)
-      const note = this.addNote({ contextId: changes.contextId ?? null })
+      if (options.projectId) this.findProject(options.projectId)
+      const note = this.addNote({ contextId: changes.contextId ?? null, projectId: options.projectId ?? null })
       if (options.id) note.id = options.id
       this.applyNoteChanges(note, { title: changes.title, content: changes.content })
       note.revision = 1
@@ -337,7 +450,15 @@ export class FakeData implements DataServices {
       note.archivedAt = archived ? now() : null
       return this.noteSummary(note)
     },
-    search: async (text, { includeArchived = false, contextId } = {}) => {
+    // Like the database: moving a note is not an edit, so revision and edit time stay.
+    setProject: async (id, projectId) => {
+      this.takeFailure()
+      const note = this.findNote(id)
+      if (projectId) this.findProject(projectId)
+      note.projectId = projectId
+      return this.noteSummary(note)
+    },
+    search: async (text, { includeArchived = false, contextId, projectId, pinnedOnly = false } = {}) => {
       if (text.length > limits.noteSearch) throw new DataError('invalid', `Keep searches to ${limits.noteSearch} characters.`)
       this.checkRead()
       const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
@@ -348,6 +469,7 @@ export class FakeData implements DataServices {
       }
       return this.noteRows
         .filter((note) => (includeArchived || !note.archivedAt) && (!contextId || note.contextId === contextId))
+        .filter((note) => (projectId === undefined || note.projectId === projectId) && (!pinnedOnly || note.pinned))
         .filter((note) => matches(`${note.title} ${note.text}`))
         .sort((a, b) => Number(matches(b.title)) - Number(matches(a.title)) || b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, 50)
@@ -355,6 +477,7 @@ export class FakeData implements DataServices {
           id: note.id,
           title: note.title,
           contextId: note.contextId,
+          projectId: note.projectId,
           pinned: note.pinned,
           archivedAt: note.archivedAt,
           updatedAt: note.updatedAt,

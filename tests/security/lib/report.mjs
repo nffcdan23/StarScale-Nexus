@@ -74,17 +74,20 @@ function allPassed(run, ids) {
  *   'full'    the full run on the empty project passed every check;
  *   'in use'  the check on the project in use passed every check (database
  *             rules, structure, restore drill, nothing changed) AND a full run
- *             has passed before, which proved Supabase's sign-in service and
- *             Data API with temporary accounts (REAL-02 to REAL-10). Those
- *             checks need an empty project and do not depend on migrations
- *             that leave sign-in alone.
+ *             has passed its sign-in and Data API checks (REAL-01 to REAL-10)
+ *             and CLOUD checks before. Those need an empty project and do not
+ *             depend on migrations that leave sign-in alone.
  * ids: { access, realOnly, cloudOnly, live } lists of check ids.
  */
 export function cloudVerification({ fingerprint, ids, cloud, live }) {
   const fullIds = [...ids.access, ...ids.realOnly, ...ids.cloudOnly]
   const liveIds = [...ids.access, 'REAL-01', ...ids.live]
   if (cloud?.fingerprint === fingerprint && allPassed(cloud, fullIds)) return { verified: true, how: 'full', project: cloud.project }
-  const signInProven = allPassed(cloud, fullIds)
+  // Only what the in-use check cannot do itself: the sign-in and Data API
+  // checks with temporary accounts, and the full run's own CLOUD checks.
+  // Access checks added since (for example for a new table) are proven by
+  // the in-use check, so an earlier full run need not include them.
+  const signInProven = allPassed(cloud, [...ids.realOnly, ...ids.cloudOnly])
   if (live?.fingerprint === fingerprint && allPassed(live, liveIds) && signInProven && live.project === cloud.project) {
     return { verified: true, how: 'in use', project: live.project }
   }

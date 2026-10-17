@@ -58,13 +58,18 @@ export async function saveBackup(backup, { environment, dir = backupsDir, now = 
   return finalPath
 }
 
+/** Every backup in a folder, oldest first, as { path, environment }. */
+export async function listBackups(dir = backupsDir) {
+  if (!existsSync(dir)) return []
+  return (await readdir(dir))
+    .filter((name) => NAME.test(name))
+    .sort((a, b) => a.match(NAME)[2].localeCompare(b.match(NAME)[2]))
+    .map((name) => ({ path: join(dir, name), environment: name.match(NAME)[1] }))
+}
+
 /** The most recent backup in a folder, or null if there is none. */
 export async function newestBackup(dir = backupsDir) {
-  if (!existsSync(dir)) return null
-  const names = (await readdir(dir)).filter((name) => NAME.test(name))
-  if (names.length === 0) return null
-  names.sort((a, b) => a.match(NAME)[2].localeCompare(b.match(NAME)[2]))
-  return join(dir, names.at(-1))
+  return (await listBackups(dir)).at(-1)?.path ?? null
 }
 
 /** A warning if the folder looks as if a cloud storage service copies it, or null. */

@@ -28,6 +28,9 @@ export const fictional = {
   noteArchived: 'c0000000-0000-4000-8000-000000000003',
   noteEdited: 'c0000000-0000-4000-8000-000000000004',
   noteOther: 'c0000000-0000-4000-8000-000000000005',
+  projectLaunch: 'e0000000-0000-4000-8000-000000000001',
+  projectOld: 'e0000000-0000-4000-8000-000000000002',
+  projectOther: 'e0000000-0000-4000-8000-000000000003',
 }
 
 export async function registerOwner(db, id, label) {
@@ -54,28 +57,37 @@ export async function addFictionalHistory(db) {
   )
 
   await db.query(
-    `insert into public.tasks
-       (id, owner_id, context_id, title, notes, status, priority, due_at, due_on, hide_from_tv, origin, source, external_id, created_at, archived_at)
-     values
-       ($1, $6, $7, 'Call the fictional supplier', E'Line one\nLine two', 'open', 'high', '2026-10-20T14:30:00Z', null, false, 'owner', null, null, '2026-09-05T08:00:00Z', null),
-       ($2, $6, $7, 'Café plans 🚀 — “quotes”', null, 'open', 'low', null, '2026-10-24', true, 'owner', null, null, '2026-09-06T08:00:00Z', null),
-       ($3, $6, $8, 'Finished fictional errand', null, 'done', 'medium', null, null, false, 'owner', null, null, '2026-09-07T08:00:00Z', null),
-       ($4, $6, $8, 'Archived fictional task', null, 'open', 'medium', null, null, false, 'owner', null, null, '2026-09-08T08:00:00Z', '2026-09-30T12:00:00Z'),
-       ($5, $6, $7, 'Imported fictional item', null, 'open', 'medium', null, null, false, 'integration', 'fiction-feed', 'item-42', '2026-09-09T08:00:00Z', null)`,
-    [f.taskTimed, f.taskDateOnly, f.taskDone, f.taskArchived, f.taskImported, f.owner, f.work, f.home],
+    `insert into public.projects (id, owner_id, name, context_id, created_at, updated_at, archived_at) values
+       ($1, $4, 'Fictional launch', $5, '2026-09-02T10:00:00.25Z', '2026-09-12T10:00:00Z', null),
+       ($2, $4, 'Old fictional project', null, '2026-08-01T10:00:00Z', '2026-09-15T10:00:00Z', '2026-09-15T10:00:00Z'),
+       ($3, $6, 'Other account project', null, '2026-09-04T10:00:00Z', '2026-09-04T10:00:00Z', null)`,
+    [f.projectLaunch, f.projectOld, f.projectOther, f.owner, f.work, f.otherOwner],
   )
 
+  await db.query(
+    `insert into public.tasks
+       (id, owner_id, context_id, title, notes, status, priority, due_at, due_on, hide_from_tv, origin, source, external_id, created_at, archived_at, project_id)
+     values
+       ($1, $6, $7, 'Call the fictional supplier', E'Line one\nLine two', 'open', 'high', '2026-10-20T14:30:00Z', null, false, 'owner', null, null, '2026-09-05T08:00:00Z', null, $9),
+       ($2, $6, $7, 'Café plans 🚀 — “quotes”', null, 'open', 'low', null, '2026-10-24', true, 'owner', null, null, '2026-09-06T08:00:00Z', null, null),
+       ($3, $6, $8, 'Finished fictional errand', null, 'done', 'medium', null, null, false, 'owner', null, null, '2026-09-07T08:00:00Z', null, null),
+       ($4, $6, $8, 'Archived fictional task', null, 'open', 'medium', null, null, false, 'owner', null, null, '2026-09-08T08:00:00Z', '2026-09-30T12:00:00Z', null),
+       ($5, $6, $7, 'Imported fictional item', null, 'open', 'medium', null, null, false, 'integration', 'fiction-feed', 'item-42', '2026-09-09T08:00:00Z', null, null)`,
+    [f.taskTimed, f.taskDateOnly, f.taskDone, f.taskArchived, f.taskImported, f.owner, f.work, f.home, f.projectLaunch],
+  )
+
+  // In a project, in the Inbox, in an archived project, and an edited Inbox note.
   const notes = [
-    [f.noteRich, f.work, 'Fictional plan', richNote.doc, true, null],
-    [f.noteLoose, null, 'Uncategorised fictional note', paragraph('Nothing real here.'), false, null],
-    [f.noteArchived, f.home, 'Archived fictional note', paragraph('Old.'), false, '2026-09-25T09:00:00Z'],
-    [f.noteEdited, f.work, 'First title', paragraph('Draft.'), false, null],
+    [f.noteRich, f.work, 'Fictional plan', richNote.doc, true, null, f.projectLaunch],
+    [f.noteLoose, null, 'Uncategorised fictional note', paragraph('Nothing real here.'), false, null, null],
+    [f.noteArchived, f.home, 'Archived fictional note', paragraph('Old.'), false, '2026-09-25T09:00:00Z', f.projectOld],
+    [f.noteEdited, f.work, 'First title', paragraph('Draft.'), false, null, null],
   ]
-  for (const [id, context, title, content, pinned, archivedAt] of notes) {
+  for (const [id, context, title, content, pinned, archivedAt, project] of notes) {
     await db.query(
-      `insert into public.notes (id, owner_id, context_id, title, content, pinned, archived_at)
-       values ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-      [id, f.owner, context, title, JSON.stringify(content), pinned, archivedAt],
+      `insert into public.notes (id, owner_id, context_id, title, content, pinned, archived_at, project_id)
+       values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)`,
+      [id, f.owner, context, title, JSON.stringify(content), pinned, archivedAt, project],
     )
   }
   await db.query(
@@ -102,8 +114,8 @@ export async function makeFictionalBackup() {
   const db = await createMockDatabase(await loadMigrations())
   try {
     await addFictionalHistory(db)
-    const { data, migrations } = await readBackupData(db, { ownerId: fictional.owner })
-    return createBackup({ data, source: { environment: 'fictional', migrations } })
+    const { data, migrations, layout } = await readBackupData(db, { ownerId: fictional.owner })
+    return createBackup({ data, source: { environment: 'fictional', migrations }, formatVersion: layout })
   } finally {
     await db.close()
   }

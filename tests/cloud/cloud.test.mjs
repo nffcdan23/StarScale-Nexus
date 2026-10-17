@@ -249,7 +249,7 @@ describe('checking the project', () => {
 
     await addFictionalHistory(migrated)
     const full = await readProjectState(migrated)
-    expect(full.counts).toEqual({ accounts: 2, identities: 2, contexts: 3, tasks: 5, notes: 5 })
+    expect(full.counts).toEqual({ accounts: 2, identities: 2, contexts: 3, projects: 3, tasks: 5, notes: 5 })
     expect(isEmpty(full)).toBe(false)
   })
 
@@ -335,21 +335,21 @@ describe('restore drill (fictional data)', () => {
     const backup = await makeFictionalBackup()
     const result = await restoreDrill(db, backup)
     expect(result.fingerprint).toBe(backup.dataFingerprint)
-    expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, tasks: 0, notes: 0 })
+    expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, projects: 0, tasks: 0, notes: 0 })
   })
 
   it('fails, and still undoes everything, when the access rules are wrong', async () => {
     const db = await database()
     await db.exec('drop policy notes_owner_with_second_factor on public.notes')
     await expect(restoreDrill(db, await makeFictionalBackup())).rejects.toThrow(/without an authenticator code could see/)
-    expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, tasks: 0, notes: 0 })
+    expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, projects: 0, tasks: 0, notes: 0 })
   })
 
   it('works beside the records of a project in use, and leaves every one of them exactly as it was', async () => {
     const db = await projectInUse()
     const before = await readDataFingerprint(db)
     const result = await restoreDrill(db, await makeFictionalBackup())
-    expect(result.counts).toEqual({ contexts: 2, tasks: 5, notes: 4 })
+    expect(result.counts).toEqual({ contexts: 2, projects: 2, tasks: 5, notes: 4 })
     expect(fingerprintChanges(before, await readDataFingerprint(db))).toEqual([])
   })
 
@@ -377,7 +377,7 @@ describe('restore drill (fictional data)', () => {
     data.notes[0].content = paragraph('x')
     data.notes[0].content.content[0].content[0].marks = [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }]
     await expect(restoreDrill(db, createBackup({ data, source: backup.source }))).rejects.toThrow(/refused the restore/)
-    expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, tasks: 0, notes: 0 })
+    expect(await counts(db)).toEqual({ accounts: 0, identities: 0, contexts: 0, projects: 0, tasks: 0, notes: 0 })
   })
 })
 
@@ -481,6 +481,15 @@ describe('cloud results stay separate', () => {
     expect(cloudVerification({ fingerprint: 'f2', ids, cloud: earlierFull, live: inUse }).verified).toBe(false)
     const changedData = { ...inUse, results: inUse.results.map((result) => (result.id === 'LIVE-06' ? { ...result, status: 'failed' } : result)) }
     expect(cloudVerification({ fingerprint: 'f1', ids, cloud: earlierFull, live: changedData }).verified).toBe(false)
+  })
+
+  it('a migration that adds access checks is verified by the in-use check, not held back by the older full run', () => {
+    const olderFull = { ...passedAll(['ACC-01', 'REAL-01', ...ids.cloudOnly], { project: 'abcd…qrst' }), fingerprint: 'old' }
+    const withNewCheck = { ...ids, access: ['ACC-01', 'PROJ-01'] }
+    const inUse = passedAll(['ACC-01', 'PROJ-01', 'REAL-01', ...ids.live], { project: 'abcd…qrst' })
+    expect(cloudVerification({ fingerprint: 'f1', ids: withNewCheck, cloud: olderFull, live: inUse })).toMatchObject({ verified: true, how: 'in use' })
+    const newCheckFailed = { ...inUse, results: inUse.results.map((result) => (result.id === 'PROJ-01' ? { ...result, status: 'failed' } : result)) }
+    expect(cloudVerification({ fingerprint: 'f1', ids: withNewCheck, cloud: olderFull, live: newCheckFailed }).verified).toBe(false)
   })
 
   it('the in-use check never claims the sign-in checks it does not run', () => {
@@ -717,5 +726,7 @@ describe('the check on a project in use (fictional data)', () => {
     await db.exec(`update public.notes set pinned = not pinned where id = 'c0000000-0000-4000-8000-000000000002'`)
     await db.exec(`insert into auth.users (id) values ('77777777-7777-4777-8777-777777777777')`)
     expect(fingerprintChanges(before, await readDataFingerprint(db))).toEqual(['sign-in accounts: 2 before, 3 after', 'notes changed'])
+    await db.exec(`update public.projects set name = 'Renamed' where id = 'e0000000-0000-4000-8000-000000000001'`)
+    expect(fingerprintChanges(before, await readDataFingerprint(db))).toContain('projects changed')
   })
 })

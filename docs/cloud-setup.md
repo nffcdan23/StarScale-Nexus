@@ -209,3 +209,37 @@ after (LIVE-06). It never creates accounts, so the sign-in checks REAL-02 to
 REAL-10 stay proven by the last full run. Results go to
 `tests/security/cloud/live-results.json` and `docs/cloud-security-report.md`,
 separate from the local report.
+
+## Applying a new migration (from Phase 4b)
+
+Every database change goes to the local stack first, then to the cloud
+project, with a proven backup on each side before and after. Nothing is ever
+reset. Keep Nexus closed on every device from step 6 to step 10.
+
+**Local stack** (Docker Desktop running, `npm run supabase -- start`):
+
+1. `npm run backup:local`: ends with `Backup verified`.
+2. `npm run supabase -- migration up --local`: applies only the new migration.
+3. `npm run backup:local` again, then `npm run backup:compare`: ends with
+   `The same records`.
+4. `npm run test:security:real`: every check passes.
+5. `npm run test:integration`: every test passes.
+
+**Cloud project:**
+
+6. `npm run backup:cloud`: ends with `Backup verified`.
+7. `npm run cloud:migrate`: lists only the new migration and the Supabase
+   tool's preview; type the project id to go ahead (answer `y` if asked).
+8. `npm run test:security:cloud-live`: every check passes.
+9. `npm run backup:cloud` again, then `npm run backup:compare`: ends with
+   `The same records`.
+10. Open the installed cloud app: Mission Control, Tasks and Notes work as
+    before.
+
+Then commit `tests/security/real/results.json`,
+`tests/security/cloud/live-results.json`, `docs/security-report.md` and
+`docs/cloud-security-report.md`.
+
+A backup made before the migration may be in an older format (for example
+format 1, before projects). That is expected: it still restores, and
+`backup:compare` reads it as the migration leaves the records.

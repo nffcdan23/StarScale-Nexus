@@ -51,10 +51,15 @@ try {
     if (owners.length !== 1) {
       throw new CloudProblem(`expected exactly one owner sign-in in the cloud project, found ${owners.length}. Nothing was saved.`)
     }
-    const { data, migrations, otherRecords } = await readBackupData(db, { ownerId: owners[0].id })
-    const backup = createBackup({ data, source: { environment: 'cloud', project: shortRef(settings.projectRef), migrations } })
+    const { data, migrations, otherRecords, layout } = await readBackupData(db, { ownerId: owners[0].id })
+    const backup = createBackup({
+      data,
+      source: { environment: 'cloud', project: shortRef(settings.projectRef), migrations },
+      formatVersion: layout,
+    })
     path = await saveBackup(backup, { environment: 'cloud' })
     console.log(`  ${describeCounts(backup.counts)}`)
+    if (backup.formatVersion === 1) console.log('  (The database has no projects yet, so this backup is in format 1. It can still be restored.)')
     if (otherRecords > 0) console.log(`  Not included: ${otherRecords} records that belong to other accounts.`)
     console.log(`Saved: ${relative(projectRoot, path)}`)
   } finally {

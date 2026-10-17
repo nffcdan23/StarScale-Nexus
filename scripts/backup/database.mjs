@@ -5,7 +5,7 @@
 // PostgreSQL client (pg) on the Windows PC, or PGlite for the throwaway
 // databases that prove a backup can be restored.
 
-import { BackupProblem, canonicalJson, TABLE_NAMES, TABLES } from './format.mjs'
+import { BackupProblem, canonicalJson, FORMAT_VERSION, LAYOUTS, TABLE_NAMES, TABLES } from './format.mjs'
 
 // Every name placed into SQL text below comes from TABLES in format.mjs,
 // never from a file or an argument. Values always travel as parameters.
@@ -25,41 +25,75 @@ export async function listOwners(db) {
   return rows
 }
 
-/** Refuses a database whose tables have columns this tool does not know, or lack ones it needs. */
-export async function checkStructure(db) {
+async function columnsByTable(db) {
   const { rows } = await db.query(`
     select table_name::text as table_name, column_name::text as column_name
     from information_schema.columns
-    where table_schema = 'public' and table_name in ('contexts', 'tasks', 'notes')
+    where table_schema = 'public' and table_name in ('contexts', 'projects', 'tasks', 'notes')
   `)
-  for (const table of TABLE_NAMES) {
-    const actual = rows.filter((row) => row.table_name === table).map((row) => row.column_name)
-    const expected = ['owner_id', ...Object.keys(TABLES[table].columns), ...TABLES[table].derived]
+  const found = {}
+  for (const row of rows) (found[row.table_name] ??= []).push(row.column_name)
+  return found
+}
+
+function layoutMismatch(found, layout) {
+  const problems = []
+  for (const [table, spec] of Object.entries(LAYOUTS[layout])) {
+    const actual = found[table] ?? []
+    const expected = ['owner_id', ...Object.keys(spec.columns), ...spec.derived]
     const unexpected = actual.filter((column) => !expected.includes(column))
     const missing = expected.filter((column) => !actual.includes(column))
-    if (unexpected.length > 0 || missing.length > 0) {
+    if (actual.length === 0) problems.push(`the ${table} table is missing`)
+    else if (unexpected.length > 0 || missing.length > 0) {
       const parts = [
         unexpected.length > 0 ? `columns this tool does not know: ${unexpected.join(', ')}` : '',
         missing.length > 0 ? `missing columns: ${missing.join(', ')}` : '',
       ].filter(Boolean)
-      throw new BackupProblem(
-        `The ${table} table does not match what the backup tool knows (${parts.join('; ')}). ` +
-          'The tool must be updated with the database before it can be used.',
-      )
+      problems.push(`the ${table} table does not match (${parts.join('; ')})`)
     }
+  }
+  const extra = Object.keys(found).filter((table) => !(table in LAYOUTS[layout]))
+  if (extra.length > 0) problems.push(`tables this layout does not have: ${extra.join(', ')}`)
+  return problems
+}
+
+/**
+ * Which backup layout the database has (see LAYOUTS in format.mjs): 2 once
+ * projects exist, 1 before. Refuses anything else, so a column this tool
+ * does not know is never silently left out.
+ */
+export async function detectLayout(db) {
+  const found = await columnsByTable(db)
+  for (const layout of [FORMAT_VERSION, 1]) {
+    if (layoutMismatch(found, layout).length === 0) return layout
+  }
+  throw new BackupProblem(
+    `The database does not match what the backup tool knows (${layoutMismatch(found, FORMAT_VERSION).join('; ')}). ` +
+      'The tool must be updated with the database before it can be used.',
+  )
+}
+
+/** Refuses a database whose tables are not exactly the given layout (the current one by default). */
+export async function checkStructure(db, layout = FORMAT_VERSION) {
+  const problems = layoutMismatch(await columnsByTable(db), layout)
+  if (problems.length > 0) {
+    throw new BackupProblem(
+      `The database does not match what the backup tool knows (${problems.join('; ')}). ` +
+        'The tool must be updated with the database before it can be used.',
+    )
   }
 }
 
 /**
  * The owner's records, exactly as stored, without the owner's account id and
- * without derived columns. Must run inside a transaction: times are read in
- * UTC so the same moment always looks the same.
+ * without derived columns, in the given layout. Must run inside a
+ * transaction: times are read in UTC so the same moment always looks the same.
  */
-export async function readTables(db, ownerId) {
+export async function readTables(db, ownerId, layout = FORMAT_VERSION) {
   await db.query(`set local timezone to 'UTC'`)
   const data = {}
-  for (const table of TABLE_NAMES) {
-    const omit = ['owner_id', ...TABLES[table].derived].map((column) => `'${column}'`).join(', ')
+  for (const [table, spec] of Object.entries(LAYOUTS[layout])) {
+    const omit = ['owner_id', ...spec.derived].map((column) => `'${column}'`).join(', ')
     const { rows } = await db.query(
       `select coalesce(jsonb_agg(to_jsonb(t) - array[${omit}]::text[] order by t.id), '[]'::jsonb) as rows
        from public.${table} t
@@ -84,23 +118,22 @@ async function readMigrations(db) {
 /**
  * Reads everything a backup needs in one read-only transaction: a consistent
  * snapshot, and the database refuses any write while it lasts.
- * Returns { data, migrations, otherRecords } where otherRecords counts
- * records that belong to other accounts and are therefore not included.
+ * Returns { data, migrations, otherRecords, layout }: otherRecords counts
+ * records that belong to other accounts and are therefore not included;
+ * layout is the format the data is in (1 before projects, 2 after).
  */
 export async function readBackupData(db, { ownerId }) {
   await db.query('begin transaction isolation level repeatable read read only')
   try {
-    await checkStructure(db)
-    const data = await readTables(db, ownerId)
+    const layout = await detectLayout(db)
+    const data = await readTables(db, ownerId, layout)
     const migrations = await readMigrations(db)
-    const { rows } = await db.query(
-      `select (select count(*) from public.contexts where owner_id <> $1::uuid)
-            + (select count(*) from public.tasks where owner_id <> $1::uuid)
-            + (select count(*) from public.notes where owner_id <> $1::uuid) as other_records`,
-      [ownerId],
-    )
+    const others = Object.keys(LAYOUTS[layout])
+      .map((table) => `(select count(*) from public.${table} where owner_id <> $1::uuid)`)
+      .join(' + ')
+    const { rows } = await db.query(`select ${others} as other_records`, [ownerId])
     await db.query('commit')
-    return { data, migrations, otherRecords: Number(rows[0].other_records) }
+    return { data, migrations, otherRecords: Number(rows[0].other_records), layout }
   } catch (error) {
     await db.query('rollback')
     throw error
@@ -199,17 +232,15 @@ export async function restoreRecords(db, backup, ownerId, { emptyScope = 'databa
   await checkStructure(db)
 
   const ownerOnly = emptyScope === 'owner'
-  const { rows: existing } = await db.query(
-    `select (select count(*) from public.contexts where $1::uuid is null or owner_id = $1::uuid)
-          + (select count(*) from public.tasks where $1::uuid is null or owner_id = $1::uuid)
-          + (select count(*) from public.notes where $1::uuid is null or owner_id = $1::uuid) as records`,
-    [ownerOnly ? ownerId : null],
-  )
+  const existingSql = TABLE_NAMES.map(
+    (table) => `(select count(*) from public.${table} where $1::uuid is null or owner_id = $1::uuid)`,
+  ).join(' + ')
+  const { rows: existing } = await db.query(`select ${existingSql} as records`, [ownerOnly ? ownerId : null])
   if (Number(existing[0].records) !== 0) {
     throw new BackupProblem(
       ownerOnly
         ? 'The stand-in owner already holds records. Nothing was restored.'
-        : 'The database to restore into already holds contexts, tasks or notes. A restore only ever goes into an empty database, so nothing is overwritten.',
+        : 'The database to restore into already holds contexts, projects, tasks or notes. A restore only ever goes into an empty database, so nothing is overwritten.',
     )
   }
   const { rows: owner } = await db.query(
@@ -231,4 +262,40 @@ export async function restoreRecords(db, backup, ownerId, { emptyScope = 'databa
   if (difference) {
     throw new BackupProblem(`The restored records do not match the backup (${difference}). Nothing was kept.`)
   }
+  await checkOwnership(db, ownerId)
+}
+
+/**
+ * After a restore: every project, task and note belongs to the owner restored
+ * for, and every link between them stays within that owner. The database's
+ * same-owner rules already enforce this; it is checked again, explicitly.
+ */
+async function checkOwnership(db, ownerId) {
+  const { rows } = await db.query(
+    `select
+       (select count(*) from public.notes n join public.projects p on p.id = n.project_id
+         where n.owner_id = $1::uuid and p.owner_id <> n.owner_id)
+     + (select count(*) from public.tasks t join public.projects p on p.id = t.project_id
+         where t.owner_id = $1::uuid and p.owner_id <> t.owner_id)
+     + (select count(*) from public.tasks t join public.contexts c on c.id = t.context_id
+         where t.owner_id = $1::uuid and c.owner_id <> t.owner_id)
+     + (select count(*) from public.notes n join public.contexts c on c.id = n.context_id
+         where n.owner_id = $1::uuid and c.owner_id <> n.owner_id)
+     + (select count(*) from public.projects p join public.contexts c on c.id = p.context_id
+         where p.owner_id = $1::uuid and c.owner_id <> p.owner_id) as crossed`,
+    [ownerId],
+  )
+  if (Number(rows[0].crossed) !== 0) {
+    throw new BackupProblem('A restored record points at another owner’s context or project. Nothing was kept.')
+  }
+}
+
+/**
+ * Whether two backups (already checked by readBackup, so in the current
+ * format) hold exactly the same records: every context, project, task and
+ * note in the first is in the second, unchanged, and nothing was added.
+ * Returns the first difference in words, or null.
+ */
+export function compareBackups(before, after) {
+  return describeDifference(before.data, after.data)
 }

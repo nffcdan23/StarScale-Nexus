@@ -27,9 +27,38 @@ export interface Context {
   createdAt: string
 }
 
+/**
+ * The single structure that organises notes, tasks and (later) files. Owned
+ * by the owner, optionally within one of their contexts, archived rather
+ * than deleted. A name is unique among the owner's active projects.
+ */
+export interface Project {
+  id: string
+  name: string
+  contextId: string | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export interface NewProject {
+  name: string
+  contextId?: string | null
+}
+
+/** A project's notes and tasks: the same records the Notes and Tasks pages show, never copies. */
+export interface ProjectContents {
+  /** Active notes, pinned first then most recently edited. */
+  notes: NoteSummary[]
+  /** Tasks that are not archived, open first (oldest first), then completed (newest first). */
+  tasks: Task[]
+}
+
 export interface Task {
   id: string
   contextId: string
+  /** Null means the task is in no project. */
+  projectId: string | null
   title: string
   notes: string | null
   status: TaskStatus
@@ -45,6 +74,7 @@ export interface Task {
 export interface NewTask {
   contextId: string
   title: string
+  projectId?: string | null
 }
 
 /** The details the owner can edit. Anything left out is unchanged. */
@@ -55,6 +85,8 @@ export interface TaskChanges {
   contextId?: string
   hideFromTv?: boolean
   deadline?: Deadline
+  /** Null takes the task out of its project. */
+  projectId?: string | null
 }
 
 /**
@@ -90,8 +122,10 @@ export interface NoteDoc {
 export interface NoteSummary {
   id: string
   title: string
-  /** Null means Uncategorised. */
+  /** Null means no context. */
   contextId: string | null
+  /** Null means the note is in the Inbox. Moving a note is not an edit: it never changes the revision. */
+  projectId: string | null
   pinned: boolean
   /** The first 200 characters of the note's plain text. */
   preview: string
@@ -135,6 +169,7 @@ export interface NoteSearchResult {
   id: string
   title: string
   contextId: string | null
+  projectId: string | null
   pinned: boolean
   archivedAt: string | null
   updatedAt: string
@@ -144,6 +179,7 @@ export interface NoteSearchResult {
 /** Database limits, repeated here so forms can stop a value before sending it. */
 export const limits = {
   contextName: 60,
+  projectName: 80,
   taskTitle: 200,
   taskNotes: 10000,
   noteTitle: 200,
@@ -173,6 +209,20 @@ export interface ContextsService {
   setArchived(id: string, archived: boolean): Promise<Context>
 }
 
+export interface ProjectsService {
+  /** Active projects by name; archived ones too when asked. */
+  list(options?: { includeArchived?: boolean }): Promise<Project[]>
+  get(id: string): Promise<Project>
+  /** Pass the same id when retrying, so a lost reply never creates a second project. */
+  create(project: NewProject, options?: { id?: string }): Promise<Project>
+  rename(id: string, name: string): Promise<Project>
+  setContext(id: string, contextId: string | null): Promise<Project>
+  /** Archiving keeps the project's notes and tasks linked; restoring needs its name to be free. */
+  setArchived(id: string, archived: boolean): Promise<Project>
+  /** The project's notes and tasks. */
+  contents(id: string): Promise<ProjectContents>
+}
+
 export interface TasksService {
   /** Open or completed tasks that are not archived, or archived tasks. */
   list(view: TaskView): Promise<Task[]>
@@ -182,6 +232,8 @@ export interface TasksService {
   update(id: string, changes: TaskChanges): Promise<Task>
   setDone(id: string, done: boolean): Promise<Task>
   setArchived(id: string, archived: boolean): Promise<Task>
+  /** Puts the task in a project, or (null) in none. */
+  setProject(id: string, projectId: string | null): Promise<Task>
 }
 
 /** The redacted summary the TV shows. The owner, with an authenticator code, may call it too. */
@@ -190,8 +242,12 @@ export interface SummaryService {
 }
 
 export interface NotesService {
-  /** Active notes, pinned first then most recently edited; or archived notes, most recently archived first. */
-  list(options?: { archived?: boolean }): Promise<NoteSummary[]>
+  /**
+   * Active notes, pinned first then most recently edited; or archived notes,
+   * most recently archived first. projectId keeps to one project, or with
+   * null to the Inbox (notes in no project); left out, every note.
+   */
+  list(options?: { archived?: boolean; projectId?: string | null }): Promise<NoteSummary[]>
   get(id: string): Promise<Note>
   /** Reads only the revision and status, never the content. */
   peek(id: string): Promise<NoteVersion>
@@ -199,7 +255,7 @@ export interface NotesService {
    * Creates a note. Pass the same id when retrying, so a request that reached
    * the database but whose reply was lost never creates a second copy.
    */
-  create(changes?: NoteChanges, options?: { id?: string }): Promise<Note>
+  create(changes?: NoteChanges, options?: { id?: string; projectId?: string | null }): Promise<Note>
   /**
    * Saves edits made to the given revision. If the note has changed since
    * (another device saved first), nothing is saved and a DataError with kind
@@ -208,12 +264,21 @@ export interface NotesService {
   save(id: string, changes: NoteChanges, baseRevision: number): Promise<Note>
   setPinned(id: string, pinned: boolean): Promise<NoteSummary>
   setArchived(id: string, archived: boolean): Promise<NoteSummary>
-  /** Title and text search, best match first, at most 50 results. */
-  search(text: string, options?: { includeArchived?: boolean; contextId?: string }): Promise<NoteSearchResult[]>
+  /** Moves the note to a project, or (null) to the Inbox. Not an edit: the revision is unchanged. */
+  setProject(id: string, projectId: string | null): Promise<NoteSummary>
+  /**
+   * Title and text search, best match first, at most 50 results. projectId
+   * keeps to one project, or with null to the Inbox; pinnedOnly to pinned notes.
+   */
+  search(
+    text: string,
+    options?: { includeArchived?: boolean; contextId?: string; projectId?: string | null; pinnedOnly?: boolean },
+  ): Promise<NoteSearchResult[]>
 }
 
 export interface DataServices {
   contexts: ContextsService
+  projects: ProjectsService
   tasks: TasksService
   summary: SummaryService
   notes: NotesService

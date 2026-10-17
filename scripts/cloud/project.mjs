@@ -139,6 +139,7 @@ export async function readProjectState(db) {
            to_regclass('public.tasks') is not null as has_tasks,
            to_regclass('public.notes') is not null as has_notes,
            to_regclass('private.identities') is not null as has_identities,
+           to_regclass('public.projects') is not null as has_projects,
            (select count(*)::int from auth.users) as accounts
   `)
   const info = rows[0]
@@ -153,11 +154,12 @@ export async function readProjectState(db) {
     version: info.version,
     majorVersion: Math.floor(info.version_num / 10000),
     applied,
-    hasNexusTables: info.has_contexts || info.has_tasks || info.has_notes || info.has_identities,
+    hasNexusTables: info.has_contexts || info.has_tasks || info.has_notes || info.has_identities || info.has_projects,
     counts: {
       accounts: info.accounts,
       identities: await count('private.identities', info.has_identities),
       contexts: await count('public.contexts', info.has_contexts),
+      projects: await count('public.projects', info.has_projects),
       tasks: await count('public.tasks', info.has_tasks),
       notes: await count('public.notes', info.has_notes),
     },
@@ -171,7 +173,7 @@ export function isEmpty(state) {
 export function describeContents(counts) {
   return (
     `${counts.accounts} sign-in accounts, ${counts.identities} registered sign-ins, ` +
-    `${counts.contexts} contexts, ${counts.tasks} tasks, ${counts.notes} notes`
+    `${counts.contexts} contexts, ${counts.projects ?? 0} projects, ${counts.tasks} tasks, ${counts.notes} notes`
   )
 }
 
@@ -217,7 +219,8 @@ export function destructiveStatements(sql) {
  * A fingerprint of everything stored in the project, computed by the
  * database itself: sign-in accounts (their ids only, as signing in changes
  * other details), registered sign-ins, contexts, tasks and notes. Taken
- * before and after the checks on a project in use: any difference means
+ * before and after the checks on a project in use (after the projects
+ * migration, which the in-use check requires): any difference means
  * something was changed. Reads only; nothing leaves the database but the
  * counts and hashes.
  */
@@ -230,6 +233,8 @@ export async function readDataFingerprint(db) {
       (select md5(coalesce(string_agg(to_jsonb(i)::text, ',' order by i.user_id), '')) from private.identities i) as identities_hash,
       (select count(*)::int from public.contexts) as contexts,
       (select md5(coalesce(string_agg(to_jsonb(c)::text, ',' order by c.id), '')) from public.contexts c) as contexts_hash,
+      (select count(*)::int from public.projects) as projects,
+      (select md5(coalesce(string_agg(to_jsonb(p)::text, ',' order by p.id), '')) from public.projects p) as projects_hash,
       (select count(*)::int from public.tasks) as tasks,
       (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.tasks t) as tasks_hash,
       (select count(*)::int from public.notes) as notes,
@@ -240,7 +245,14 @@ export async function readDataFingerprint(db) {
 
 /** What differs between two fingerprints, in words; empty when nothing changed. */
 export function fingerprintChanges(before, after) {
-  const labels = { accounts: 'sign-in accounts', identities: 'registered sign-ins', contexts: 'contexts', tasks: 'tasks', notes: 'notes' }
+  const labels = {
+    accounts: 'sign-in accounts',
+    identities: 'registered sign-ins',
+    contexts: 'contexts',
+    projects: 'projects',
+    tasks: 'tasks',
+    notes: 'notes',
+  }
   return Object.entries(labels)
     .filter(([key]) => before[key] !== after[key] || before[`${key}_hash`] !== after[`${key}_hash`])
     .map(([key, label]) => (before[key] !== after[key] ? `${label}: ${before[key]} before, ${after[key]} after` : `${label} changed`))

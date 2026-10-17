@@ -86,11 +86,12 @@ try {
     )
   }
   const owner = await chooseOwner(client, requestedOwner)
-  const { data, migrations, otherRecords } = await readBackupData(client, { ownerId: owner.id })
-  backup = createBackup({ data, source: { environment: 'local', migrations } })
+  const { data, migrations, otherRecords, layout } = await readBackupData(client, { ownerId: owner.id })
+  backup = createBackup({ data, source: { environment: 'local', migrations }, formatVersion: layout })
   path = await saveBackup(backup, { environment: 'local' })
 
   console.log(`  ${describeCounts(backup.counts)}`)
+  if (backup.formatVersion === 1) console.log('  (The database has no projects yet, so this backup is in format 1. It can still be restored.)')
   if (otherRecords > 0) {
     console.log(`  Not included: ${otherRecords} records that belong to other accounts (for example test accounts).`)
   }
