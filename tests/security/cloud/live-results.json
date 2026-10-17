@@ -1,5 +1,5 @@
 {
-  "fingerprint": "c67d6af563c1",
+  "fingerprint": "a674fc3b2d95",
   "ranOn": "2026-10-17",
   "system": "win32",
   "project": "wovl…zeow",
@@ -19,12 +19,12 @@
     {
       "id": "LIVE-03",
       "status": "passed",
-      "detail": "4 of 4 applied in order"
+      "detail": "5 of 5 applied in order"
     },
     {
       "id": "LIVE-04",
       "status": "passed",
-      "detail": "4 tables, 43 columns, 31 constraints, 10 indexes, 6 policies, 7 functions, 3 triggers, 45 permissions; PostgreSQL local 17.11, cloud 17.11"
+      "detail": "5 tables, 52 columns, 38 constraints, 15 indexes, 8 policies, 7 functions, 4 triggers, 56 permissions; PostgreSQL local 17.11, cloud 17.11"
     },
     {
       "id": "REAL-01",
@@ -507,6 +507,186 @@
       "detail": ""
     },
     {
+      "id": "PROJ-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-11",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-12",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-13",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-14",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-15",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-16",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-17",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-18",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "PROJ-19",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-08",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-09",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "LINK-10",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-01",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-02",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-03",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-04",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-05",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-06",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "id": "SRCH-07",
+      "status": "passed",
+      "detail": ""
+    },
+    {
       "id": "LIVE-05",
       "status": "passed",
       "detail": "2 contexts, 5 tasks, 4 notes restored identically, then undone"
@@ -514,7 +694,7 @@
     {
       "id": "LIVE-06",
       "status": "passed",
-      "detail": "1 sign-in accounts, 1 registered sign-ins, 0 contexts, 0 tasks, 2 notes"
+      "detail": "1 sign-in accounts, 1 registered sign-ins, 0 contexts, 0 projects, 0 tasks, 2 notes"
     }
   ]
 }

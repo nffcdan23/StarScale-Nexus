@@ -5,7 +5,7 @@ results are in `docs/security-report.md`; nothing here counts for the local stac
 
 Migrations fingerprint: `a674fc3b2d95`
 
-**Cloud project status: NOT VERIFIED for this version of the migrations.**
+**Cloud project status: VERIFIED for this version of the migrations (project wovl…zeow), by the check on the project in use; Supabase's sign-in service by the last full run.**
 
 Two kinds of run, recorded separately:
 
@@ -23,22 +23,22 @@ Two kinds of run, recorded separately:
 | Run | Passed | Failed | Not executed | Stale | Total |
 | --- | --- | --- | --- | --- | --- |
 | Full run | 0 | 0 | 36 | 111 | 147 |
-| In-use check | 0 | 0 | 36 | 102 | 138 |
+| In-use check | 138 | 0 | 0 | 0 | 138 |
 
 Last full run: 2026-10-16 on win32 on project wovl…zeow, PostgreSQL 17.11, migrations fingerprint `c67d6af563c1` (older migrations: re-run needed).
 
-Last in-use check: 2026-10-17 on win32 on project wovl…zeow, PostgreSQL 17.11, migrations fingerprint `c67d6af563c1` (older migrations: re-run needed).
+Last in-use check: 2026-10-17 on win32 on project wovl…zeow, PostgreSQL 17.11, migrations fingerprint `a674fc3b2d95` (current).
 
 ## In-use checks
 
 | ID | Check | In-use check | Detail |
 | --- | --- | --- | --- |
-| LIVE-01 | The publishable key and the database connection belong to this project, over a verified encrypted connection | Stale (passed), re-run needed | publishable key accepted by wovl…zeow; TLS verified |
-| LIVE-02 | Sign-in settings match supabase/config.toml: sign-ups off, email and password only | Stale (passed), re-run needed |  |
-| LIVE-03 | The cloud database has exactly this project's migrations, in order | Stale (passed), re-run needed | 4 of 4 applied in order |
-| LIVE-04 | Tables, columns, rules, functions, triggers and permissions match the verified local database | Stale (passed), re-run needed | 4 tables, 43 columns, 31 constraints, 10 indexes, 6 policies, 7 functions, 3 triggers, 45 permissions; PostgreSQL local 17.11, cloud 17.11 |
-| LIVE-05 | Restore drill beside the existing records: a fictional backup restores identically, only its owner with a code sees it, and it is fully undone | Stale (passed), re-run needed | 2 contexts, 5 tasks, 4 notes restored identically, then undone |
-| LIVE-06 | Every existing account, sign-in, context, task and note is exactly as it was before the checks | Stale (passed), re-run needed | 1 sign-in accounts, 1 registered sign-ins, 0 contexts, 0 tasks, 2 notes |
+| LIVE-01 | The publishable key and the database connection belong to this project, over a verified encrypted connection | Passed | publishable key accepted by wovl…zeow; TLS verified |
+| LIVE-02 | Sign-in settings match supabase/config.toml: sign-ups off, email and password only | Passed |  |
+| LIVE-03 | The cloud database has exactly this project's migrations, in order | Passed | 5 of 5 applied in order |
+| LIVE-04 | Tables, columns, rules, functions, triggers and permissions match the verified local database | Passed | 5 tables, 52 columns, 38 constraints, 15 indexes, 8 policies, 7 functions, 4 triggers, 56 permissions; PostgreSQL local 17.11, cloud 17.11 |
+| LIVE-05 | Restore drill beside the existing records: a fictional backup restores identically, only its owner with a code sees it, and it is fully undone | Passed | 2 contexts, 5 tasks, 4 notes restored identically, then undone |
+| LIVE-06 | Every existing account, sign-in, context, task and note is exactly as it was before the checks | Passed | 1 sign-in accounts, 1 registered sign-ins, 0 contexts, 0 projects, 0 tasks, 2 notes |
 
 ## Full-run checks
 
@@ -55,7 +55,7 @@ Last in-use check: 2026-10-17 on win32 on project wovl…zeow, PostgreSQL 17.11,
 
 | ID | Check | Full run | In-use check |
 | --- | --- | --- | --- |
-| REAL-01 | The migrations apply cleanly to a real Supabase database | Stale (passed), re-run needed | Stale (passed), re-run needed |
+| REAL-01 | The migrations apply cleanly to a real Supabase database | Stale (passed), re-run needed | Passed |
 | REAL-02 | A visitor with only the public key reads nothing through the Data API | Stale (passed), re-run needed | Not part of this check |
 | REAL-03 | A visitor with only the public key cannot run the TV summary | Stale (passed), re-run needed | Not part of this check |
 | REAL-04 | Password sign-in alone gives the owner no data | Stale (passed), re-run needed | Not part of this check |
@@ -70,134 +70,134 @@ Last in-use check: 2026-10-17 on win32 on project wovl…zeow, PostgreSQL 17.11,
 
 | ID | Who | Check | Full run | In-use check |
 | --- | --- | --- | --- | --- |
-| ANON-01 | Not signed in | Cannot read tasks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-02 | Not signed in | Cannot read contexts | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-03 | Not signed in | Cannot add a task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-04 | Not signed in | Cannot change tasks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-05 | Not signed in | Cannot delete tasks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-06 | Not signed in | Cannot run the TV summary | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-07 | Not signed in | Cannot read the identity register | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-08 | Not signed in | Cannot run private helper functions | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-01 | TV sign-in | Sees no tasks directly | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-02 | TV sign-in | Sees no contexts directly | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-03 | TV sign-in | Cannot add a task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-04 | TV sign-in | Cannot add a context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-05 | TV sign-in | Cannot change any task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-06 | TV sign-in | Cannot delete tasks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-07 | TV sign-in | Cannot read the identity register | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-08 | TV sign-in | TV summary shows only visible tasks, titles and dates only | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-01 | Owner, no authenticator code | Sees no tasks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-02 | Owner, no authenticator code | Sees no contexts | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-03 | Owner, no authenticator code | Cannot add a task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-04 | Owner, no authenticator code | Cannot change any task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-05 | Owner, no authenticator code | Cannot run the TV summary | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-01 | Owner, with authenticator code | Sees their own five tasks and nobody else's | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-02 | Owner, with authenticator code | Sees their own two contexts | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-03 | Owner, with authenticator code | Can add a task; the database records the owner and origin itself | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-04 | Owner, with authenticator code | Can change their own task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-05 | Owner, with authenticator code | Marking a task done records when it was completed | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-06 | Owner, with authenticator code | Cannot delete tasks (archive only) | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-07 | Owner, with authenticator code | Cannot choose a task's owner | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-08 | Owner, with authenticator code | Cannot choose a task's origin | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-09 | Owner, with authenticator code | Cannot hand a task to another owner | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-10 | Owner, with authenticator code | Cannot file a task under another owner's context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-11 | Owner, with authenticator code | Cannot change another owner's task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-12 | Owner, with authenticator code | A blank task title is rejected | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-13 | Owner, with authenticator code | Cannot read the identity register | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-14 | Owner, with authenticator code | Can run the summary, with the same redaction as the TV | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-15 | Owner, with authenticator code | Reopening a task clears its completion time | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-16 | Owner, with authenticator code | Can archive their own task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-17 | Owner, with authenticator code | Can restore their own archived task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-18 | Owner, with authenticator code | Can rename a context and change its TV setting | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-19 | Owner, with authenticator code | Cannot hand a context to another owner | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-20 | Owner, with authenticator code | Cannot change another owner's context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-09 | TV sign-in | Cannot change any context or its TV setting | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-06 | Owner, no authenticator code | Cannot change any context or its TV setting | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-21 | Owner, with authenticator code | Can give a task a date-only deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-22 | Owner, with authenticator code | A task cannot have both a date-only and a timed deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-23 | Owner, with authenticator code | Can add a task with a date-only deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| OWNER-24 | Owner, with authenticator code | Can switch a deadline from a date to a time in one change | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-10 | TV sign-in | Cannot set any deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-07 | Owner, no authenticator code | Cannot set any deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-09 | Not signed in | Cannot set any deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-11 | TV sign-in | TV summary includes a date-only deadline | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-12 | TV sign-in | TV summary leaves out tasks in an archived context, even one shown on TV | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-13 | TV sign-in | TV summary lists by deadline day in London time, then priority | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TVCODE-01 | TV sign-in that enrolled its own authenticator | Still sees no tasks directly | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TVCODE-02 | TV sign-in that enrolled its own authenticator | Still cannot add a task | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TVCODE-03 | TV sign-in that enrolled its own authenticator | Still cannot add a context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TVCODE-04 | TV sign-in that enrolled its own authenticator | Still gets only the redacted summary | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| STRANGER-01 | Unregistered sign-in, with authenticator code | Sees no tasks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| STRANGER-02 | Unregistered sign-in, with authenticator code | Cannot add a context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| STRANGER-03 | Unregistered sign-in, with authenticator code | Cannot run the TV summary | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-10 | Not signed in | Cannot read notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| ANON-11 | Not signed in | Cannot search notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-14 | TV sign-in | Sees no notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-15 | TV sign-in | Cannot add a note | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-16 | TV sign-in | Cannot change any note | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-17 | TV sign-in | Finds nothing when searching notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TV-18 | TV sign-in | TV summary contains no note titles or text | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| TVCODE-05 | TV sign-in that enrolled its own authenticator | Still sees no notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-08 | Owner, no authenticator code | Sees no notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-09 | Owner, no authenticator code | Cannot add a note | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOCODE-10 | Owner, no authenticator code | Finds nothing when searching notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| STRANGER-04 | Unregistered sign-in, with authenticator code | Sees no notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-01 | Owner, with authenticator code | Sees their own three notes and nobody else's | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-02 | Owner, with authenticator code | Can add a note with no context; the database sets the owner, revision and searchable text | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-03 | Owner, with authenticator code | Can file a note under their own context, and take it out again | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-04 | Owner, with authenticator code | Cannot file a note under another owner's context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-05 | Owner, with authenticator code | Cannot choose a note's owner | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-06 | Owner, with authenticator code | Cannot change a note's owner | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-07 | Owner, with authenticator code | Cannot set a revision number | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-08 | Owner, with authenticator code | Cannot set the creation or edit time | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-09 | Owner, with authenticator code | Cannot write the searchable text directly | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-10 | Owner, with authenticator code | The searchable text always follows the document: headings, lists and line breaks | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-11 | Owner, with authenticator code | Editing the title or text raises the revision | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-12 | Owner, with authenticator code | Pinning or archiving leaves the revision alone | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-13 | Owner, with authenticator code | A save based on an older revision changes nothing | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-14 | Owner, with authenticator code | Cannot delete notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-15 | Owner, with authenticator code | Content that is not a document is rejected | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-16 | Owner, with authenticator code | A link that is not a web or email address is rejected | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-17 | Owner, with authenticator code | A title over 200 characters is rejected | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-18 | Owner, with authenticator code | Cannot change another owner's note | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-19 | Owner, with authenticator code | Search finds their own notes by word or word start, never archived or other owners' notes | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-20 | Owner, with authenticator code | Search can include archived notes and keep to one context | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-21 | Owner, with authenticator code | Search snippets mark matches with characters that are not HTML | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-22 | Owner, with authenticator code | An overlong search is refused | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| NOTE-23 | Owner, with authenticator code | Every editor format (quotes, dividers, code included) is accepted and its text made searchable | Stale (passed), re-run needed | Stale (passed), re-run needed |
-| PROJ-01 | Not signed in | Cannot read projects | Not executed | Not executed |
-| PROJ-02 | TV sign-in | Sees no projects | Not executed | Not executed |
-| PROJ-03 | TV sign-in that enrolled its own authenticator | Sees no projects even with its own authenticator | Not executed | Not executed |
-| PROJ-04 | Owner, no authenticator code | Sees no projects without the authenticator code | Not executed | Not executed |
-| PROJ-05 | Unregistered sign-in, with authenticator code | Sees no projects | Not executed | Not executed |
-| PROJ-06 | Owner, with authenticator code | Sees their own two projects (active and archived) and nobody else's | Not executed | Not executed |
-| PROJ-07 | Owner, with authenticator code | Can create a project under their own context; the database sets the owner | Not executed | Not executed |
-| PROJ-08 | Owner, with authenticator code | Cannot choose a project's owner | Not executed | Not executed |
-| PROJ-09 | TV sign-in | Cannot create projects | Not executed | Not executed |
-| PROJ-10 | Owner, no authenticator code | Cannot create projects without the authenticator code | Not executed | Not executed |
-| PROJ-11 | Owner, with authenticator code | Cannot have two active projects with the same name (ignoring case and spaces) | Not executed | Not executed |
-| PROJ-12 | Owner, with authenticator code | Can reuse an archived project's name | Not executed | Not executed |
-| PROJ-13 | Owner, with authenticator code | Can archive a project and restore another | Not executed | Not executed |
-| PROJ-14 | Owner, with authenticator code | Cannot restore an archived project while an active one has its name | Not executed | Not executed |
-| PROJ-15 | Owner, with authenticator code | Cannot delete projects | Not executed | Not executed |
-| PROJ-16 | Owner, with authenticator code | Cannot change a project's owner or timestamps | Not executed | Not executed |
-| PROJ-17 | Owner, with authenticator code | Cannot put a project under another owner's context | Not executed | Not executed |
-| PROJ-18 | Owner, with authenticator code | Cannot rename another owner's project | Not executed | Not executed |
-| PROJ-19 | TV sign-in | Cannot rename projects | Not executed | Not executed |
-| LINK-01 | Owner, with authenticator code | Can move a note into their own project without it counting as an edit | Not executed | Not executed |
-| LINK-02 | Owner, with authenticator code | Cannot move a note into another owner's project | Not executed | Not executed |
-| LINK-03 | Owner, with authenticator code | Can take a note out of its project, back to the Inbox | Not executed | Not executed |
-| LINK-04 | Owner, with authenticator code | Can create a note directly in their own project | Not executed | Not executed |
-| LINK-05 | Owner, with authenticator code | Cannot create a note in another owner's project | Not executed | Not executed |
-| LINK-06 | Owner, with authenticator code | Can put a task in their own project | Not executed | Not executed |
-| LINK-07 | Owner, with authenticator code | Cannot put a task in another owner's project | Not executed | Not executed |
-| LINK-08 | Owner, no authenticator code | Cannot move notes without the authenticator code | Not executed | Not executed |
-| LINK-09 | TV sign-in | Cannot move tasks between projects | Not executed | Not executed |
-| LINK-10 | TV sign-in | The TV summary never mentions projects, even for a task in one | Not executed | Not executed |
-| SRCH-01 | Owner, with authenticator code | Search can keep to one project, and says which project each note is in | Not executed | Not executed |
-| SRCH-02 | Owner, with authenticator code | Search can keep to the Inbox (notes in no project) | Not executed | Not executed |
-| SRCH-03 | Owner, with authenticator code | Search can keep to pinned notes | Not executed | Not executed |
-| SRCH-04 | Owner, with authenticator code | Search still works when called the earlier way, as older app builds do | Not executed | Not executed |
-| SRCH-05 | Owner, with authenticator code | Searching another owner's project finds nothing | Not executed | Not executed |
-| SRCH-06 | TV sign-in | Searching by project finds nothing | Not executed | Not executed |
-| SRCH-07 | Not signed in | Cannot search by project | Not executed | Not executed |
+| ANON-01 | Not signed in | Cannot read tasks | Stale (passed), re-run needed | Passed |
+| ANON-02 | Not signed in | Cannot read contexts | Stale (passed), re-run needed | Passed |
+| ANON-03 | Not signed in | Cannot add a task | Stale (passed), re-run needed | Passed |
+| ANON-04 | Not signed in | Cannot change tasks | Stale (passed), re-run needed | Passed |
+| ANON-05 | Not signed in | Cannot delete tasks | Stale (passed), re-run needed | Passed |
+| ANON-06 | Not signed in | Cannot run the TV summary | Stale (passed), re-run needed | Passed |
+| ANON-07 | Not signed in | Cannot read the identity register | Stale (passed), re-run needed | Passed |
+| ANON-08 | Not signed in | Cannot run private helper functions | Stale (passed), re-run needed | Passed |
+| TV-01 | TV sign-in | Sees no tasks directly | Stale (passed), re-run needed | Passed |
+| TV-02 | TV sign-in | Sees no contexts directly | Stale (passed), re-run needed | Passed |
+| TV-03 | TV sign-in | Cannot add a task | Stale (passed), re-run needed | Passed |
+| TV-04 | TV sign-in | Cannot add a context | Stale (passed), re-run needed | Passed |
+| TV-05 | TV sign-in | Cannot change any task | Stale (passed), re-run needed | Passed |
+| TV-06 | TV sign-in | Cannot delete tasks | Stale (passed), re-run needed | Passed |
+| TV-07 | TV sign-in | Cannot read the identity register | Stale (passed), re-run needed | Passed |
+| TV-08 | TV sign-in | TV summary shows only visible tasks, titles and dates only | Stale (passed), re-run needed | Passed |
+| NOCODE-01 | Owner, no authenticator code | Sees no tasks | Stale (passed), re-run needed | Passed |
+| NOCODE-02 | Owner, no authenticator code | Sees no contexts | Stale (passed), re-run needed | Passed |
+| NOCODE-03 | Owner, no authenticator code | Cannot add a task | Stale (passed), re-run needed | Passed |
+| NOCODE-04 | Owner, no authenticator code | Cannot change any task | Stale (passed), re-run needed | Passed |
+| NOCODE-05 | Owner, no authenticator code | Cannot run the TV summary | Stale (passed), re-run needed | Passed |
+| OWNER-01 | Owner, with authenticator code | Sees their own five tasks and nobody else's | Stale (passed), re-run needed | Passed |
+| OWNER-02 | Owner, with authenticator code | Sees their own two contexts | Stale (passed), re-run needed | Passed |
+| OWNER-03 | Owner, with authenticator code | Can add a task; the database records the owner and origin itself | Stale (passed), re-run needed | Passed |
+| OWNER-04 | Owner, with authenticator code | Can change their own task | Stale (passed), re-run needed | Passed |
+| OWNER-05 | Owner, with authenticator code | Marking a task done records when it was completed | Stale (passed), re-run needed | Passed |
+| OWNER-06 | Owner, with authenticator code | Cannot delete tasks (archive only) | Stale (passed), re-run needed | Passed |
+| OWNER-07 | Owner, with authenticator code | Cannot choose a task's owner | Stale (passed), re-run needed | Passed |
+| OWNER-08 | Owner, with authenticator code | Cannot choose a task's origin | Stale (passed), re-run needed | Passed |
+| OWNER-09 | Owner, with authenticator code | Cannot hand a task to another owner | Stale (passed), re-run needed | Passed |
+| OWNER-10 | Owner, with authenticator code | Cannot file a task under another owner's context | Stale (passed), re-run needed | Passed |
+| OWNER-11 | Owner, with authenticator code | Cannot change another owner's task | Stale (passed), re-run needed | Passed |
+| OWNER-12 | Owner, with authenticator code | A blank task title is rejected | Stale (passed), re-run needed | Passed |
+| OWNER-13 | Owner, with authenticator code | Cannot read the identity register | Stale (passed), re-run needed | Passed |
+| OWNER-14 | Owner, with authenticator code | Can run the summary, with the same redaction as the TV | Stale (passed), re-run needed | Passed |
+| OWNER-15 | Owner, with authenticator code | Reopening a task clears its completion time | Stale (passed), re-run needed | Passed |
+| OWNER-16 | Owner, with authenticator code | Can archive their own task | Stale (passed), re-run needed | Passed |
+| OWNER-17 | Owner, with authenticator code | Can restore their own archived task | Stale (passed), re-run needed | Passed |
+| OWNER-18 | Owner, with authenticator code | Can rename a context and change its TV setting | Stale (passed), re-run needed | Passed |
+| OWNER-19 | Owner, with authenticator code | Cannot hand a context to another owner | Stale (passed), re-run needed | Passed |
+| OWNER-20 | Owner, with authenticator code | Cannot change another owner's context | Stale (passed), re-run needed | Passed |
+| TV-09 | TV sign-in | Cannot change any context or its TV setting | Stale (passed), re-run needed | Passed |
+| NOCODE-06 | Owner, no authenticator code | Cannot change any context or its TV setting | Stale (passed), re-run needed | Passed |
+| OWNER-21 | Owner, with authenticator code | Can give a task a date-only deadline | Stale (passed), re-run needed | Passed |
+| OWNER-22 | Owner, with authenticator code | A task cannot have both a date-only and a timed deadline | Stale (passed), re-run needed | Passed |
+| OWNER-23 | Owner, with authenticator code | Can add a task with a date-only deadline | Stale (passed), re-run needed | Passed |
+| OWNER-24 | Owner, with authenticator code | Can switch a deadline from a date to a time in one change | Stale (passed), re-run needed | Passed |
+| TV-10 | TV sign-in | Cannot set any deadline | Stale (passed), re-run needed | Passed |
+| NOCODE-07 | Owner, no authenticator code | Cannot set any deadline | Stale (passed), re-run needed | Passed |
+| ANON-09 | Not signed in | Cannot set any deadline | Stale (passed), re-run needed | Passed |
+| TV-11 | TV sign-in | TV summary includes a date-only deadline | Stale (passed), re-run needed | Passed |
+| TV-12 | TV sign-in | TV summary leaves out tasks in an archived context, even one shown on TV | Stale (passed), re-run needed | Passed |
+| TV-13 | TV sign-in | TV summary lists by deadline day in London time, then priority | Stale (passed), re-run needed | Passed |
+| TVCODE-01 | TV sign-in that enrolled its own authenticator | Still sees no tasks directly | Stale (passed), re-run needed | Passed |
+| TVCODE-02 | TV sign-in that enrolled its own authenticator | Still cannot add a task | Stale (passed), re-run needed | Passed |
+| TVCODE-03 | TV sign-in that enrolled its own authenticator | Still cannot add a context | Stale (passed), re-run needed | Passed |
+| TVCODE-04 | TV sign-in that enrolled its own authenticator | Still gets only the redacted summary | Stale (passed), re-run needed | Passed |
+| STRANGER-01 | Unregistered sign-in, with authenticator code | Sees no tasks | Stale (passed), re-run needed | Passed |
+| STRANGER-02 | Unregistered sign-in, with authenticator code | Cannot add a context | Stale (passed), re-run needed | Passed |
+| STRANGER-03 | Unregistered sign-in, with authenticator code | Cannot run the TV summary | Stale (passed), re-run needed | Passed |
+| ANON-10 | Not signed in | Cannot read notes | Stale (passed), re-run needed | Passed |
+| ANON-11 | Not signed in | Cannot search notes | Stale (passed), re-run needed | Passed |
+| TV-14 | TV sign-in | Sees no notes | Stale (passed), re-run needed | Passed |
+| TV-15 | TV sign-in | Cannot add a note | Stale (passed), re-run needed | Passed |
+| TV-16 | TV sign-in | Cannot change any note | Stale (passed), re-run needed | Passed |
+| TV-17 | TV sign-in | Finds nothing when searching notes | Stale (passed), re-run needed | Passed |
+| TV-18 | TV sign-in | TV summary contains no note titles or text | Stale (passed), re-run needed | Passed |
+| TVCODE-05 | TV sign-in that enrolled its own authenticator | Still sees no notes | Stale (passed), re-run needed | Passed |
+| NOCODE-08 | Owner, no authenticator code | Sees no notes | Stale (passed), re-run needed | Passed |
+| NOCODE-09 | Owner, no authenticator code | Cannot add a note | Stale (passed), re-run needed | Passed |
+| NOCODE-10 | Owner, no authenticator code | Finds nothing when searching notes | Stale (passed), re-run needed | Passed |
+| STRANGER-04 | Unregistered sign-in, with authenticator code | Sees no notes | Stale (passed), re-run needed | Passed |
+| NOTE-01 | Owner, with authenticator code | Sees their own three notes and nobody else's | Stale (passed), re-run needed | Passed |
+| NOTE-02 | Owner, with authenticator code | Can add a note with no context; the database sets the owner, revision and searchable text | Stale (passed), re-run needed | Passed |
+| NOTE-03 | Owner, with authenticator code | Can file a note under their own context, and take it out again | Stale (passed), re-run needed | Passed |
+| NOTE-04 | Owner, with authenticator code | Cannot file a note under another owner's context | Stale (passed), re-run needed | Passed |
+| NOTE-05 | Owner, with authenticator code | Cannot choose a note's owner | Stale (passed), re-run needed | Passed |
+| NOTE-06 | Owner, with authenticator code | Cannot change a note's owner | Stale (passed), re-run needed | Passed |
+| NOTE-07 | Owner, with authenticator code | Cannot set a revision number | Stale (passed), re-run needed | Passed |
+| NOTE-08 | Owner, with authenticator code | Cannot set the creation or edit time | Stale (passed), re-run needed | Passed |
+| NOTE-09 | Owner, with authenticator code | Cannot write the searchable text directly | Stale (passed), re-run needed | Passed |
+| NOTE-10 | Owner, with authenticator code | The searchable text always follows the document: headings, lists and line breaks | Stale (passed), re-run needed | Passed |
+| NOTE-11 | Owner, with authenticator code | Editing the title or text raises the revision | Stale (passed), re-run needed | Passed |
+| NOTE-12 | Owner, with authenticator code | Pinning or archiving leaves the revision alone | Stale (passed), re-run needed | Passed |
+| NOTE-13 | Owner, with authenticator code | A save based on an older revision changes nothing | Stale (passed), re-run needed | Passed |
+| NOTE-14 | Owner, with authenticator code | Cannot delete notes | Stale (passed), re-run needed | Passed |
+| NOTE-15 | Owner, with authenticator code | Content that is not a document is rejected | Stale (passed), re-run needed | Passed |
+| NOTE-16 | Owner, with authenticator code | A link that is not a web or email address is rejected | Stale (passed), re-run needed | Passed |
+| NOTE-17 | Owner, with authenticator code | A title over 200 characters is rejected | Stale (passed), re-run needed | Passed |
+| NOTE-18 | Owner, with authenticator code | Cannot change another owner's note | Stale (passed), re-run needed | Passed |
+| NOTE-19 | Owner, with authenticator code | Search finds their own notes by word or word start, never archived or other owners' notes | Stale (passed), re-run needed | Passed |
+| NOTE-20 | Owner, with authenticator code | Search can include archived notes and keep to one context | Stale (passed), re-run needed | Passed |
+| NOTE-21 | Owner, with authenticator code | Search snippets mark matches with characters that are not HTML | Stale (passed), re-run needed | Passed |
+| NOTE-22 | Owner, with authenticator code | An overlong search is refused | Stale (passed), re-run needed | Passed |
+| NOTE-23 | Owner, with authenticator code | Every editor format (quotes, dividers, code included) is accepted and its text made searchable | Stale (passed), re-run needed | Passed |
+| PROJ-01 | Not signed in | Cannot read projects | Not executed | Passed |
+| PROJ-02 | TV sign-in | Sees no projects | Not executed | Passed |
+| PROJ-03 | TV sign-in that enrolled its own authenticator | Sees no projects even with its own authenticator | Not executed | Passed |
+| PROJ-04 | Owner, no authenticator code | Sees no projects without the authenticator code | Not executed | Passed |
+| PROJ-05 | Unregistered sign-in, with authenticator code | Sees no projects | Not executed | Passed |
+| PROJ-06 | Owner, with authenticator code | Sees their own two projects (active and archived) and nobody else's | Not executed | Passed |
+| PROJ-07 | Owner, with authenticator code | Can create a project under their own context; the database sets the owner | Not executed | Passed |
+| PROJ-08 | Owner, with authenticator code | Cannot choose a project's owner | Not executed | Passed |
+| PROJ-09 | TV sign-in | Cannot create projects | Not executed | Passed |
+| PROJ-10 | Owner, no authenticator code | Cannot create projects without the authenticator code | Not executed | Passed |
+| PROJ-11 | Owner, with authenticator code | Cannot have two active projects with the same name (ignoring case and spaces) | Not executed | Passed |
+| PROJ-12 | Owner, with authenticator code | Can reuse an archived project's name | Not executed | Passed |
+| PROJ-13 | Owner, with authenticator code | Can archive a project and restore another | Not executed | Passed |
+| PROJ-14 | Owner, with authenticator code | Cannot restore an archived project while an active one has its name | Not executed | Passed |
+| PROJ-15 | Owner, with authenticator code | Cannot delete projects | Not executed | Passed |
+| PROJ-16 | Owner, with authenticator code | Cannot change a project's owner or timestamps | Not executed | Passed |
+| PROJ-17 | Owner, with authenticator code | Cannot put a project under another owner's context | Not executed | Passed |
+| PROJ-18 | Owner, with authenticator code | Cannot rename another owner's project | Not executed | Passed |
+| PROJ-19 | TV sign-in | Cannot rename projects | Not executed | Passed |
+| LINK-01 | Owner, with authenticator code | Can move a note into their own project without it counting as an edit | Not executed | Passed |
+| LINK-02 | Owner, with authenticator code | Cannot move a note into another owner's project | Not executed | Passed |
+| LINK-03 | Owner, with authenticator code | Can take a note out of its project, back to the Inbox | Not executed | Passed |
+| LINK-04 | Owner, with authenticator code | Can create a note directly in their own project | Not executed | Passed |
+| LINK-05 | Owner, with authenticator code | Cannot create a note in another owner's project | Not executed | Passed |
+| LINK-06 | Owner, with authenticator code | Can put a task in their own project | Not executed | Passed |
+| LINK-07 | Owner, with authenticator code | Cannot put a task in another owner's project | Not executed | Passed |
+| LINK-08 | Owner, no authenticator code | Cannot move notes without the authenticator code | Not executed | Passed |
+| LINK-09 | TV sign-in | Cannot move tasks between projects | Not executed | Passed |
+| LINK-10 | TV sign-in | The TV summary never mentions projects, even for a task in one | Not executed | Passed |
+| SRCH-01 | Owner, with authenticator code | Search can keep to one project, and says which project each note is in | Not executed | Passed |
+| SRCH-02 | Owner, with authenticator code | Search can keep to the Inbox (notes in no project) | Not executed | Passed |
+| SRCH-03 | Owner, with authenticator code | Search can keep to pinned notes | Not executed | Passed |
+| SRCH-04 | Owner, with authenticator code | Search still works when called the earlier way, as older app builds do | Not executed | Passed |
+| SRCH-05 | Owner, with authenticator code | Searching another owner's project finds nothing | Not executed | Passed |
+| SRCH-06 | TV sign-in | Searching by project finds nothing | Not executed | Passed |
+| SRCH-07 | Not signed in | Cannot search by project | Not executed | Passed |
